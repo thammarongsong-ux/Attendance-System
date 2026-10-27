@@ -7,6 +7,14 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // ✅ Safelist สำหรับ Tailwind (แก้บั๊ค dynamic class)
+  tailwind.config = {
+    safelist: [
+      {pattern: /(bg|text|border|hover:bg|hover:text)-(red|green|yellow|blue|purple|gray|indigo|teal)-(50|100|200|300|500|600|700|800)/},
+    ]
+  };
+</script>
 <style>
   body { box-sizing: border-box; font-family: 'Sarabun', sans-serif; }
   .logo-size { width: 3cm; height: 3cm; }
@@ -36,7 +44,7 @@
   </div>
 </header>
 
-<!-- NAV -->
+<!-- NAV (เหมือนเดิม ไม่มีการแก้) -->
 <nav class="bg-white shadow-md border-b-2 border-red-200">
   <div class="container mx-auto px-4">
     <div class="flex flex-wrap justify-center gap-2 py-4">
@@ -53,7 +61,7 @@
 
 <main class="container mx-auto px-4 py-8">
 
-<!-- DASHBOARD -->
+<!-- หน้าต่างๆ คงเดิมทั้งหมด -->
 <div id="dashboard-page" class="page">
   <div class="text-center mb-8">
     <h2 class="text-4xl font-bold text-gray-800 mb-4">ยินดีต้อนรับสู่ระบบเช็คชื่อนักเรียน</h2>
@@ -64,23 +72,16 @@
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" id="dashboard-cards"></div>
 </div>
 
-<!-- CHECKIN -->
 <div id="checkin-page" class="page hidden">
   <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">📝 เช็คชื่อนักเรียน</h2>
   <div class="bg-white rounded-lg shadow-md p-6 mb-6 border border-black">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <div>
-        <label class="block text-sm font-semibold mb-2">📅 วันที่</label>
-        <input type="date" id="attendance-date" class="w-full px-3 py-2 border border-black rounded-lg">
-      </div>
-      <div>
-        <label class="block text-sm font-semibold mb-2">🎓 ชั้นเรียน</label>
-        <select id="attendance-class" class="w-full px-3 py-2 border border-black rounded-lg"></select>
-      </div>
-      <div>
-        <label class="block text-sm font-semibold mb-2">📚 วิชา</label>
-        <select id="attendance-subject" class="w-full px-3 py-2 border border-black rounded-lg"></select>
-      </div>
+      <div><label class="block text-sm font-semibold mb-2">📅 วันที่</label>
+        <input type="date" id="attendance-date" class="w-full px-3 py-2 border border-black rounded-lg"></div>
+      <div><label class="block text-sm font-semibold mb-2">🎓 ชั้นเรียน</label>
+        <select id="attendance-class" class="w-full px-3 py-2 border border-black rounded-lg"></select></div>
+      <div><label class="block text-sm font-semibold mb-2">📚 วิชา</label>
+        <select id="attendance-subject" class="w-full px-3 py-2 border border-black rounded-lg"></select></div>
     </div>
     <button onclick="loadStudentsForAttendance()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-semibold">🔍 โหลดรายชื่อ</button>
   </div>
@@ -89,17 +90,13 @@
   </div>
 </div>
 
-<!-- STATISTICS -->
 <div id="statistics-page" class="page hidden">
   <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">📊 สถิติการเข้าเรียน</h2>
   <div class="bg-white rounded-lg shadow-md p-6 border border-black mb-6">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div>
-        <label class="block text-sm font-semibold mb-2">🎓 ชั้นเรียน</label>
-        <select id="stats-class" class="w-full px-3 py-2 border border-black rounded-lg"></select>
-      </div>
-      <div>
-        <label class="block text-sm font-semibold mb-2">📅 ช่วงเวลา</label>
+      <div><label class="block text-sm font-semibold mb-2">🎓 ชั้นเรียน</label>
+        <select id="stats-class" class="w-full px-3 py-2 border border-black rounded-lg"></select></div>
+      <div><label class="block text-sm font-semibold mb-2">📅 ช่วงเวลา</label>
         <select id="stats-period" class="w-full px-3 py-2 border border-black rounded-lg" onchange="toggleCustomDate()">
           <option value="all">ทั้งหมด</option>
           <option value="today">วันนี้</option>
@@ -107,22 +104,21 @@
           <option value="this-week">สัปดาห์นี้</option>
           <option value="this-month">เดือนนี้</option>
           <option value="custom">กำหนดเอง</option>
-        </select>
-      </div>
+        </select></div>
       <div class="flex items-end">
-        <button onclick="loadStatistics()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-semibold">📈 โหลดสถิติ</button>
-      </div>
+        <button onclick="loadStatistics()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-semibold">📈 โหลดสถิติ</button></div>
     </div>
     <div id="custom-date-range" class="hidden mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div><label class="block text-sm font-semibold mb-2">📅 ตั้งแต่</label><input type="date" id="start-date" class="w-full px-3 py-2 border rounded-lg"></div>
-        <div><label class="block text-sm font-semibold mb-2">📅 ถึง</label><input type="date" id="end-date" class="w-full px-3 py-2 border rounded-lg"></div>
+        <div><label class="block text-sm font-semibold mb-2">📅 ตั้งแต่</label>
+          <input type="date" id="start-date" class="w-full px-3 py-2 border rounded-lg"></div>
+        <div><label class="block text-sm font-semibold mb-2">📅 ถึง</label>
+          <input type="date" id="end-date" class="w-full px-3 py-2 border rounded-lg"></div>
       </div>
     </div>
   </div>
   <div id="statistics-content" class="bg-white rounded-lg shadow-md p-6 border border-black">
-    <p class="text-gray-500 text-center">กรุณากดปุ่มโหลดสถิติ</p>
-  </div>
+    <p class="text-gray-500 text-center">กรุณากดปุ่มโหลดสถิติ</p></div>
 </div>
 
 <!-- ADD STUDENT -->
@@ -162,9 +158,7 @@
         <div class="mb-4">
           <label class="block text-sm font-semibold mb-2">📝 รายชื่อ (ทีละบรรทัด)</label>
           <textarea id="bulk-students" required rows="10" class="w-full px-3 py-2 border border-black rounded-lg"
-            placeholder="นาย สมชาย ใจดี
-5 นางสาว สมหญิง รักเรียน
-นาย วิชัย เก่งมาก"></textarea>
+            placeholder="นาย สมชาย ใจดี&#10;5 นางสาว สมหญิง รักเรียน&#10;นาย วิชัย เก่งมาก"></textarea>
           <div class="mt-2 text-sm text-gray-600">💡 ถ้าไม่ใส่เลขที่ ระบบจะไล่เลขอัตโนมัติ</div>
         </div>
         <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold">➕ เพิ่มทั้งหมด</button>
@@ -179,8 +173,7 @@
           <select id="import-class" required class="w-full px-3 py-2 border border-black rounded-lg class-select"></select></div>
         <div class="mb-4"><label class="block text-sm font-semibold mb-2">📋 ข้อมูล (CSV / Tab / ข้อความ)</label>
           <textarea id="import-data" required rows="12" class="w-full px-3 py-2 border border-black rounded-lg font-mono text-sm"
-            placeholder="1,นาย สมชาย ใจดี
-2,นางสาว สมหญิง รักเรียน"></textarea>
+            placeholder="1,นาย สมชาย ใจดี&#10;2,นางสาว สมหญิง รักเรียน"></textarea>
           <div class="mt-2 text-sm text-gray-600">💡 รองรับ: <code>1,ชื่อ</code> / <code>1[TAB]ชื่อ</code> / <code>1. ชื่อ</code></div>
         </div>
         <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold">📥 นำเข้า</button>
@@ -198,7 +191,6 @@
       <button onclick="showSubjectMode('bulk')"   class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold">📚 เพิ่มหลายวิชา</button>
     </div>
   </div>
-
   <div id="single-subject-mode" class="subject-mode">
     <div class="bg-white rounded-lg shadow-md p-6 border border-black max-w-md mx-auto">
       <form id="add-subject-form" onsubmit="addSubject(event)">
@@ -210,7 +202,6 @@
       </form>
     </div>
   </div>
-
   <div id="bulk-subject-mode" class="subject-mode hidden">
     <div class="bg-white rounded-lg shadow-md p-6 border border-black max-w-4xl mx-auto">
       <form id="bulk-subject-form" onsubmit="addBulkSubjects(event)">
@@ -218,9 +209,7 @@
           <select id="bulk-subject-class" required class="w-full px-3 py-2 border border-black rounded-lg class-select"></select></div>
         <div class="mb-4"><label class="block text-sm font-semibold mb-2">📝 รายชื่อวิชา (ทีละบรรทัด)</label>
           <textarea id="bulk-subjects" required rows="10" class="w-full px-3 py-2 border border-black rounded-lg"
-            placeholder="คณิตศาสตร์
-ภาษาไทย
-ภาษาอังกฤษ"></textarea></div>
+            placeholder="คณิตศาสตร์&#10;ภาษาไทย&#10;ภาษาอังกฤษ"></textarea></div>
         <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold">➕ เพิ่มทั้งหมด</button>
       </form>
     </div>
@@ -237,55 +226,42 @@
       <button onclick="showManageMode('attendance')" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold">✅ จัดการการเช็คชื่อ</button>
     </div>
   </div>
-
   <div id="manage-students-mode" class="manage-mode hidden">
     <div class="bg-white rounded-lg shadow-md p-6 border border-black">
       <div class="flex flex-wrap justify-between items-center mb-4">
         <h3 class="text-xl font-semibold">👨‍🎓 ข้อมูลนักเรียน</h3>
-        <div class="flex gap-2 mt-2 md:mt-0">
-          <select id="filter-student-class" class="px-3 py-2 border rounded-lg text-sm" onchange="loadStudentsData()">
-            <option value="">ทุกชั้น</option>
-          </select>
-        </div>
+        <select id="filter-student-class" class="px-3 py-2 border rounded-lg text-sm" onchange="loadStudentsData()">
+          <option value="">ทุกชั้น</option></select>
       </div>
-      <div id="students-data-container">
-        <div class="text-center py-8 text-gray-500">กำลังโหลด...</div>
-      </div>
+      <div id="students-data-container"><div class="text-center py-8 text-gray-500">กำลังโหลด...</div></div>
     </div>
   </div>
-
   <div id="manage-subjects-mode" class="manage-mode hidden">
     <div class="bg-white rounded-lg shadow-md p-6 border border-black">
       <div class="flex flex-wrap justify-between items-center mb-4">
         <h3 class="text-xl font-semibold">📚 ข้อมูลวิชา</h3>
-        <div class="flex gap-2 mt-2 md:mt-0">
-          <select id="filter-subject-class" class="px-3 py-2 border rounded-lg text-sm" onchange="loadSubjectsData()">
-            <option value="">ทุกชั้น</option>
-          </select>
-        </div>
+        <select id="filter-subject-class" class="px-3 py-2 border rounded-lg text-sm" onchange="loadSubjectsData()">
+          <option value="">ทุกชั้น</option></select>
       </div>
-      <div id="subjects-data-container">
-        <div class="text-center py-8 text-gray-500">กำลังโหลด...</div>
-      </div>
+      <div id="subjects-data-container"><div class="text-center py-8 text-gray-500">กำลังโหลด...</div></div>
     </div>
   </div>
-
   <div id="manage-attendance-mode" class="manage-mode hidden">
     <div class="bg-white rounded-lg shadow-md p-6 border border-black">
       <h3 class="text-xl font-semibold mb-4">✅ ข้อมูลการเช็คชื่อ</h3>
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-        <div><label class="block text-sm font-semibold mb-2">📅 วันที่</label><input type="date" id="filter-date" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+        <div><label class="block text-sm font-semibold mb-2">📅 วันที่</label>
+          <input type="date" id="filter-date" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
         <div><label class="block text-sm font-semibold mb-2">🎓 ชั้น</label>
           <select id="filter-class" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="">ทุกชั้น</option></select></div>
         <div><label class="block text-sm font-semibold mb-2">📊 สถานะ</label>
           <select id="filter-status" class="w-full px-3 py-2 border rounded-lg text-sm">
             <option value="">ทั้งหมด</option><option value="มา">✅ มา</option><option value="สาย">⏰ สาย</option><option value="ลา">📝 ลา</option><option value="ขาด">❌ ขาด</option>
           </select></div>
-        <div class="flex items-end"><button onclick="loadAttendanceData()" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm">🔍 โหลด</button></div>
+        <div class="flex items-end">
+          <button onclick="loadAttendanceData()" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm">🔍 โหลด</button></div>
       </div>
-      <div id="attendance-data-container">
-        <div class="text-center py-8 text-gray-500">กดปุ่ม "โหลด" เพื่อดูข้อมูล</div>
-      </div>
+      <div id="attendance-data-container"><div class="text-center py-8 text-gray-500">กดปุ่ม "โหลด" เพื่อดูข้อมูล</div></div>
     </div>
   </div>
 </div>
@@ -297,6 +273,7 @@
     <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm">
       <p class="mb-1"><strong>📌 สถานะ:</strong> <span id="admin-conn-status">กำลังตรวจสอบ...</span></p>
       <p><strong>🔗 Sheet ID ปัจจุบัน:</strong> <span id="admin-current-sheet">-</span></p>
+      <p><strong>📦 Schema Version:</strong> <span id="admin-schema-ver">-</span></p>
     </div>
     <div class="mb-4">
       <label class="block text-sm font-semibold mb-2">🔗 Google Sheet ID ใหม่</label>
@@ -310,17 +287,22 @@
              placeholder="รหัสผ่านที่ตั้งไว้ใน setup()">
     </div>
     <button onclick="updateSheetIdFromAdmin()"
-            class="w-full bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold">
-      💾 บันทึก Sheet ID
-    </button>
+            class="w-full bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold">💾 บันทึก Sheet ID</button>
     <p id="admin-status" class="text-sm text-gray-600 mt-3 text-center"></p>
   </div>
 
   <div class="bg-white rounded-lg shadow-md p-6 border border-black max-w-xl mx-auto mt-6">
+    <h3 class="text-lg font-semibold mb-3">🔑 เปลี่ยนรหัส Admin</h3>
+    <div class="mb-2"><label class="block text-sm mb-1">รหัสเดิม</label>
+      <input id="old-admin-pass" type="password" class="w-full border rounded-lg px-3 py-2"></div>
+    <div class="mb-2"><label class="block text-sm mb-1">รหัสใหม่ (≥6 ตัว)</label>
+      <input id="new-admin-pass" type="password" class="w-full border rounded-lg px-3 py-2"></div>
+    <button onclick="changeAdminPassword()" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-2 rounded-lg font-semibold mt-2">🔐 เปลี่ยนรหัส</button>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-md p-6 border border-black max-w-xl mx-auto mt-6">
     <h3 class="text-lg font-semibold mb-3">🧪 ทดสอบการเชื่อมต่อ</h3>
-    <button onclick="testConnection()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold">
-      🔌 ทดสอบเชื่อมต่อ Web App
-    </button>
+    <button onclick="testConnection()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold">🔌 ทดสอบเชื่อมต่อ Web App</button>
     <div id="test-result" class="mt-3 text-sm"></div>
   </div>
 </div>
@@ -333,33 +315,49 @@
    CONFIG
    ================================================== */
 const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwwsLeMP1yaL6Z7OAtOW2M2KPDTNuRiE7D33nf7DNECn9MsL4Jaz2QCtsOStSzyw53X/exec';
+// ⚠️ แก้ไข API_TOKEN ด้านล่างให้ตรงกับที่ได้จาก setup() (ดูใน Log)
+const API_TOKEN = 'PASTE_YOUR_API_TOKEN_HERE';
+
 const ALL_CLASSES = ['ป.1','ป.2','ป.3','ป.4','ป.5','ป.6','ม.1','ม.2','ม.3'];
 const STATUS_LIST = ['มา','สาย','ลา','ขาด'];
+const STATUS_STYLE = {
+  'มา':  { bg:'bg-green-500',  text:'text-green-700',  hover:'hover:bg-green-50',  border:'border-green-500', chip:'bg-green-100 text-green-800' },
+  'สาย': { bg:'bg-yellow-500', text:'text-yellow-700', hover:'hover:bg-yellow-50', border:'border-yellow-500', chip:'bg-yellow-100 text-yellow-800' },
+  'ลา':  { bg:'bg-blue-500',   text:'text-blue-700',   hover:'hover:bg-blue-50',   border:'border-blue-500', chip:'bg-blue-100 text-blue-800' },
+  'ขาด': { bg:'bg-red-500',    text:'text-red-700',    hover:'hover:bg-red-50',    border:'border-red-500', chip:'bg-red-100 text-red-800' }
+};
+const STATUS_ICON = { 'มา':'✅', 'สาย':'⏰', 'ลา':'📝', 'ขาด':'❌' };
 
 let allData = { students: [], subjects: [], attendance: [] };
 let isConnected = false;
 
 /* ==================================================
-   API LAYER
+   API LAYER (with timeout)
    ================================================== */
 async function callApi(action, data = null) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
   try {
     const res = await fetch(WEB_APP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, data })
+      body: JSON.stringify({ action, data: { ...(data||{}), apiToken: API_TOKEN } }),
+      signal: controller.signal
     });
     const text = await res.text();
     let json;
     try { json = JSON.parse(text); }
-    catch (e) { throw new Error('ตอบกลับไม่ใช่ JSON: ' + text.slice(0, 200)); }
+    catch { throw new Error('ตอบกลับไม่ใช่ JSON: ' + text.slice(0, 200)); }
     if (!json.ok) throw new Error(json.error || 'Unknown error');
     return json.data;
   } catch (err) {
+    if (err.name === 'AbortError') throw new Error('หมดเวลาเชื่อมต่อ (20 วินาที)');
     if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-      throw new Error('เชื่อมต่อ Web App ไม่ได้ — ตรวจสอบว่า Deploy แล้ว และเปิด "Anyone"');
+      throw new Error('เชื่อมต่อ Web App ไม่ได้ — ตรวจสอบการ Deploy');
     }
     throw err;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -396,9 +394,7 @@ function setConnectionStatus(type, msg) {
   if (!el) return;
   el.textContent = msg;
   el.className = 'text-xs mt-2 ' + (
-    type === 'ok' ? 'text-green-200' :
-    type === 'err' ? 'text-red-200' :
-    'text-yellow-200'
+    type === 'ok' ? 'text-green-200' : type === 'err' ? 'text-red-200' : 'text-yellow-200'
   );
 }
 
@@ -411,36 +407,40 @@ function esc(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// ✅ ฟังก์ชันใหม่: ดึงตัวเลขและระดับชั้นออกมาเปรียบเทียบ (แม่นยำ 100%)
+// ✅ normalize ให้เป็นมาตรฐานเดียว ป้องกัน class mismatch
 function normalizeClass(c) {
   if (!c) return '';
-  let s = String(c).toLowerCase().replace(/\s+/g, '');
-  s = s.replace(/ชั้น/g, '');
-  
-  const match = s.match(/(?:ป\.|ประถม|ปีที่|ม\.|มัธยม|ที่)?\s*(\d+)/);
-  if (match) {
-    const num = match[1].replace(/[๐-๙]/g, d => String.fromCharCode(d.charCodeAt(0) - 0x0E50 + 48));
-    if (s.includes('ม.') || s.includes('มัธยม')) return 'ม.' + num;
-    if (s.includes('ป.') || s.includes('ประถม')) return 'ป.' + num;
-    return num;
-  }
-  return s;
+  let s = String(c).toLowerCase().replace(/\s+/g, '')
+    .replace(/ชั้น|ระดับ|ปีที่/g, '')
+    .replace(/[๐-๙]/g, d => String.fromCharCode(d.charCodeAt(0) - 0x0E50 + 48));
+  const m = s.match(/(\d+)/);
+  if (!m) return s;
+  const num = m[1];
+  if (/ม|มัธยม|m\./.test(s)) return 'ม.' + num;
+  if (/ป|ประถม|p\./.test(s) || /^\d+$/.test(s)) return 'ป.' + num;
+  return num;
 }
 
 function todayThaiStr() {
-  const now = new Date();
-  const b = new Date(now.getTime() + 7*3600*1000);
-  return b.toISOString().split('T')[0];
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year:'numeric', month:'2-digit', day:'2-digit'
+  }).formatToParts(new Date());
+  const g = t => parts.find(p => p.type === t).value;
+  return `${g('year')}-${g('month')}-${g('day')}`;
 }
-function toThaiStr(d) {
-  const t = new Date(d.getTime() + 7*3600*1000);
-  return t.toISOString().split('T')[0];
-}
+
 function fmtThaiDate(dateStr) {
   if (!dateStr) return '-';
-  try { return new Date(dateStr + 'T00:00:00').toLocaleDateString('th-TH'); }
-  catch { return dateStr; }
+  try {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2,'0');
+    const mon = String(d.getMonth()+1).padStart(2,'0');
+    const yr = d.getFullYear() + 543;
+    return `${day}/${mon}/${yr}`;
+  } catch { return dateStr; }
 }
+
 function showLoading(title = 'กำลังดำเนินการ...') {
   Swal.fire({ title, allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 }
@@ -483,12 +483,10 @@ function updateSubjectDropdown() {
   if (!sel) return;
   sel.innerHTML = '<option value="">เลือกวิชา</option>';
   if (!cls) return;
-  
   const subs = allData.subjects.filter(s => normalizeClass(s.subject_class) === cls);
-  
   if (!subs.length) {
     const o = document.createElement('option');
-    o.textContent = `(ไม่มีวิชาสำหรับชั้นนี้)`; o.disabled = true; sel.appendChild(o);
+    o.textContent = '(ไม่มีวิชาสำหรับชั้นนี้)'; o.disabled = true; sel.appendChild(o);
     return;
   }
   subs.forEach(s => {
@@ -501,30 +499,27 @@ function updateSubjectDropdown() {
 /* ==================================================
    DASHBOARD
    ================================================== */
-function refreshUI() {
-  renderDashboard();
-  updateSubjectDropdown();
-}
+function refreshUI() { renderDashboard(); updateSubjectDropdown(); }
 
 function renderDashboard() {
-  const container = document.getElementById('dashboard-cards');
-  if (!container) return;
+  const c = document.getElementById('dashboard-cards');
+  if (!c) return;
   const today = todayThaiStr();
   const todayAtt = allData.attendance.filter(r => r.attendance_date === today).length;
   const cards = [
     {icon:'✅', title:'เช็คชื่อ', value:`${allData.attendance.length} ครั้ง`, color:'red',    sub:`วันนี้ ${todayAtt} รายการ`},
-    {icon:'👨‍🎓', title:'นักเรียน', value:`${allData.students.length} คน`,     color:'blue',   sub:`${ALL_CLASSES.length} ชั้นเรียน`},
-    {icon:'📚', title:'วิชาเรียน', value:`${allData.subjects.length} วิชา`,   color:'green',  sub:`ทุกชั้นเรียน`},
-    {icon:'📊', title:'สถานะ',     value: isConnected ? 'ออนไลน์' : 'ออฟไลน์', color:'purple', sub: isConnected ? 'Google Sheets' : 'ตรวจสอบการเชื่อมต่อ'}
+    {icon:'👨‍🎓', title:'นักเรียน', value:`${allData.students.length} คน`, color:'blue',   sub:`${ALL_CLASSES.length} ชั้นเรียน`},
+    {icon:'📚', title:'วิชาเรียน', value:`${allData.subjects.length} วิชา`, color:'green',  sub:`ทุกชั้นเรียน`},
+    {icon:'📊', title:'สถานะ', value: isConnected ? 'ออนไลน์' : 'ออฟไลน์', color:'purple', sub: isConnected ? 'Google Sheets' : 'ตรวจสอบการเชื่อมต่อ'}
   ];
-  container.innerHTML = cards.map(c => `
-    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-${c.color}-500 hover:shadow-lg transition-shadow">
+  c.innerHTML = cards.map(x => `
+    <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-${x.color}-500 hover:shadow-lg">
       <div class="flex items-center">
-        <div class="text-3xl mr-4">${c.icon}</div>
+        <div class="text-3xl mr-4">${x.icon}</div>
         <div>
-          <h3 class="text-lg font-semibold text-gray-800">${c.title}</h3>
-          <p class="text-xl font-bold text-${c.color}-600">${c.value}</p>
-          <p class="text-xs text-gray-500">${c.sub}</p>
+          <h3 class="text-lg font-semibold text-gray-800">${x.title}</h3>
+          <p class="text-xl font-bold text-${x.color}-600">${x.value}</p>
+          <p class="text-xs text-gray-500">${x.sub}</p>
         </div>
       </div>
     </div>`).join('');
@@ -552,16 +547,16 @@ function showStorageInfo() {
    ================================================== */
 function loadStudentsForAttendance() {
   const date    = document.getElementById('attendance-date').value;
-  const cls     = normalizeClass(document.getElementById('attendance-class').value);
+  const clsRaw  = document.getElementById('attendance-class').value;
+  const cls     = normalizeClass(clsRaw);
   const subject = document.getElementById('attendance-subject').value;
-  
   if (!date || !cls || !subject) {
     Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่ ชั้นเรียน และวิชา', 'warning'); return;
   }
-  
+
   const students = allData.students
     .filter(s => normalizeClass(s.student_class) === cls)
-    .sort((a, b) => String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }));
+    .sort((a,b) => String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }));
 
   const list = document.getElementById('student-list');
   if (!students.length) {
@@ -574,36 +569,37 @@ function loadStudentsForAttendance() {
     return;
   }
 
-  const existingCount = allData.attendance.filter(r =>
-    r.attendance_date === date && r.attendance_subject === subject &&
-    students.some(s => String(s.student_id) === String(r.attendance_student_id))
-  ).length;
+  // map attendance ตาม student_id + class + subject (ครั้งเดียว)
+  const key = sid => `${date}|${sid}|${subject}`;
+  const recMap = new Map();
+  allData.attendance.forEach(r => {
+    if (r.attendance_date === date && r.attendance_subject === subject
+        && normalizeClass(r.attendance_student_class) === cls) {
+      recMap.set(String(r.attendance_student_id), r);
+    }
+  });
+  const existingCount = [...recMap.keys()].filter(sid =>
+    students.some(s => String(s.student_id) === sid)).length;
 
   let html = `
     <div class="mb-4 flex flex-wrap justify-between items-center gap-2">
-      <h3 class="text-xl font-bold">ชั้น ${esc(document.getElementById('attendance-class').value)} — วิชา ${esc(subject)}</h3>
+      <h3 class="text-xl font-bold">ชั้น ${esc(clsRaw)} — วิชา ${esc(subject)}</h3>
       <div class="text-sm bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
         👥 ${students.length} คน | ✅ เช็คแล้ว ${existingCount} คน | ⏳ ค้าง ${students.length - existingCount} คน
       </div>
     </div>
     <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-4">
       <div class="flex flex-wrap gap-2">
-        ${STATUS_LIST.map(s => {
-          const colors = { มา:'green', สาย:'yellow', ลา:'blue', ขาด:'red' };
-          const icons  = { มา:'✅', สาย:'⏰', ลา:'📝', ขาด:'❌' };
-          return `<button onclick="selectAllStatus('${s}')" class="bulk-button px-4 py-2 bg-${colors[s]}-500 hover:bg-${colors[s]}-600 text-white rounded-lg font-medium">${icons[s]} ทั้งชั้น "${s}"</button>`;
-        }).join('')}
+        ${STATUS_LIST.map(s => `
+          <button onclick="selectAllStatus('${s}')" class="bulk-button px-4 py-2 ${STATUS_STYLE[s].bg} hover:opacity-90 text-white rounded-lg font-medium">${STATUS_ICON[s]} ทั้งชั้น "${s}"</button>
+        `).join('')}
         <button onclick="clearAllStatus()" class="bulk-button px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium">🔄 ล้าง</button>
       </div>
     </div>
     <div class="space-y-3">`;
 
   students.forEach(st => {
-    const rec = allData.attendance.find(r =>
-      r.attendance_date === date &&
-      String(r.attendance_student_id) === String(st.student_id) &&
-      r.attendance_subject === subject
-    );
+    const rec = recMap.get(String(st.student_id));
     const curStatus = rec ? rec.attendance_status : '';
     const curNotes  = rec ? (rec.attendance_notes || '') : '';
     const history = allData.attendance.filter(r => String(r.attendance_student_id) === String(st.student_id));
@@ -616,11 +612,10 @@ function loadStudentsForAttendance() {
     const total = h.มา + h.สาย + h.ลา + h.ขาด;
     const rate = total ? (((h.มา + h.สาย) / total) * 100).toFixed(0) : '0';
 
-    const statusColors = { มา:'green', สาย:'yellow', ลา:'blue', ขาด:'red' };
-    const icons = { มา:'✅', สาย:'⏰', ลา:'📝', ขาด:'❌' };
+    const curStyle = curStatus ? STATUS_STYLE[curStatus] : null;
 
     html += `
-      <div class="student-card bg-white ${curStatus ? `border-${statusColors[curStatus]}-300` : 'border-gray-200'} p-4 rounded-lg border-2">
+      <div class="student-card bg-white ${curStyle ? curStyle.border : 'border-gray-200'} p-4 rounded-lg border-2">
         <div class="flex flex-col md:flex-row md:items-center gap-3">
           <div class="flex-1 min-w-0">
             <h4 class="font-semibold text-lg">${esc(st.student_id)}. ${esc(st.student_name)}</h4>
@@ -630,15 +625,19 @@ function loadStudentsForAttendance() {
             </div>
           </div>
           <div class="flex flex-wrap gap-2">
-            ${STATUS_LIST.map(v => `
-              <label class="cursor-pointer">
-                <input type="radio" name="status-${esc(st.student_id)}" value="${v}"
-                  class="status-radio hidden" ${curStatus === v ? 'checked' : ''}
-                  onchange="updateRadioStyle(this)">
-                <span class="status-label inline-block px-3 py-1 rounded-full border-2 border-${statusColors[v]}-500 ${curStatus === v ? `bg-${statusColors[v]}-500 text-white` : `text-${statusColors[v]}-700 hover:bg-${statusColors[v]}-50`}">
-                  ${icons[v]} ${v}
-                </span>
-              </label>`).join('')}
+            ${STATUS_LIST.map(v => {
+              const st2 = STATUS_STYLE[v];
+              const isSel = curStatus === v;
+              return `
+                <label class="cursor-pointer">
+                  <input type="radio" data-student-id="${esc(st.student_id)}" value="${v}"
+                    class="status-radio hidden" ${isSel ? 'checked' : ''}
+                    onchange="updateRadioStyle(this)">
+                  <span class="status-label inline-block px-3 py-1 rounded-full border-2 ${st2.border} ${isSel ? `${st2.bg} text-white` : `${st2.text} ${st2.hover}`}">
+                    ${STATUS_ICON[v]} ${v}
+                  </span>
+                </label>`;
+            }).join('')}
           </div>
           <div class="md:w-48">
             <input type="text" placeholder="หมายเหตุ" value="${esc(curNotes)}"
@@ -658,17 +657,23 @@ function loadStudentsForAttendance() {
 }
 
 function updateRadioStyle(radio) {
-  const name = radio.name;
-  const colors = { มา:'green', สาย:'yellow', ลา:'blue', ขาด:'red' };
-  document.querySelectorAll(`input[name="${name}"]`).forEach(r => {
+  const sid = radio.getAttribute('data-student-id');
+  document.querySelectorAll(`input.status-radio[data-student-id="${CSS.escape(sid)}"]`).forEach(r => {
     const lbl = r.nextElementSibling;
     const v = r.value;
-    const c = colors[v];
-    lbl.className = `status-label inline-block px-3 py-1 rounded-full border-2 border-${c}-500 ${r.checked ? `bg-${c}-500 text-white` : `text-${c}-700 hover:bg-${c}-50`}`;
+    const s = STATUS_STYLE[v];
+    lbl.className = `status-label inline-block px-3 py-1 rounded-full border-2 ${s.border} ${r.checked ? `${s.bg} text-white` : `${s.text} ${s.hover}`}`;
   });
 }
 
-function selectAllStatus(status) {
+async function selectAllStatus(status) {
+  const conf = await Swal.fire({
+    title: `ตั้งทั้งชั้นเป็น "${status}"?`,
+    text: 'จะเขียนทับสถานะที่เลือกไว้ (ยังไม่บันทึกจนกว่าจะกดปุ่มบันทึก)',
+    icon: 'question', showCancelButton: true,
+    confirmButtonText: 'ตกลง', cancelButtonText: 'ยกเลิก'
+  });
+  if (!conf.isConfirmed) return;
   document.querySelectorAll('.status-radio').forEach(r => {
     if (r.value === status) { r.checked = true; updateRadioStyle(r); }
   });
@@ -682,20 +687,23 @@ function clearAllStatus() {
 
 async function saveAttendance() {
   const date    = document.getElementById('attendance-date').value;
-  const cls     = normalizeClass(document.getElementById('attendance-class').value);
+  const clsRaw  = document.getElementById('attendance-class').value;
+  const cls     = normalizeClass(clsRaw);
   const subject = document.getElementById('attendance-subject').value;
   if (!date || !cls || !subject) { Swal.fire('แจ้งเตือน', 'ข้อมูลไม่ครบ', 'warning'); return; }
 
   const students = allData.students.filter(s => normalizeClass(s.student_class) === cls);
   const records = [];
-
   students.forEach(st => {
-    const radio = document.querySelector(`input[name="status-${CSS.escape(st.student_id)}"]:checked`);
+    const radio = document.querySelector(
+      `input.status-radio[data-student-id="${CSS.escape(String(st.student_id))}"]:checked`);
     if (!radio) return;
-    const notesInput = document.querySelector(`input.notes-input[data-student-id="${CSS.escape(st.student_id)}"]`);
+    const notesInput = document.querySelector(
+      `input.notes-input[data-student-id="${CSS.escape(String(st.student_id))}"]`);
     records.push({
       date,
-      student_id: st.student_id,
+      student_id: String(st.student_id),
+      student_class: String(st.student_class),
       subject,
       status: radio.value,
       notes: notesInput ? notesInput.value.trim() : ''
@@ -716,12 +724,23 @@ async function saveAttendance() {
 }
 
 /* ==================================================
-   ADD STUDENT
+   ADD STUDENT / SUBJECT / IMPORT (เหมือนเดิม)
    ================================================== */
 function showAddMode(mode) {
   document.querySelectorAll('.add-mode').forEach(el => el.classList.add('hidden'));
   const map = { single:'single-student-mode', bulk:'bulk-student-mode', import:'import-student-mode' };
   document.getElementById(map[mode])?.classList.remove('hidden');
+}
+function showSubjectMode(mode) {
+  document.querySelectorAll('.subject-mode').forEach(el => el.classList.add('hidden'));
+  document.getElementById(mode === 'single' ? 'single-subject-mode' : 'bulk-subject-mode')?.classList.remove('hidden');
+}
+function showManageMode(mode) {
+  document.querySelectorAll('.manage-mode').forEach(el => el.classList.add('hidden'));
+  const map = { students:'manage-students-mode', subjects:'manage-subjects-mode', attendance:'manage-attendance-mode' };
+  document.getElementById(map[mode])?.classList.remove('hidden');
+  if (mode === 'students') loadStudentsData();
+  if (mode === 'subjects') loadSubjectsData();
 }
 
 async function addStudent(e) {
@@ -730,16 +749,13 @@ async function addStudent(e) {
   const name = document.getElementById('student-name').value.trim();
   const cls = document.getElementById('student-class').value;
   if (!id || !name || !cls) { Swal.fire('แจ้งเตือน', 'กรอกข้อมูลให้ครบ', 'warning'); return; }
-
   showLoading('กำลังบันทึก...');
   try {
     await callApi('addStudent', { student_id: id, student_name: name, student_class: cls });
     Swal.fire('สำเร็จ', 'เพิ่มนักเรียนแล้ว', 'success');
     document.getElementById('add-student-form').reset();
     await loadAllDataFromSheet();
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 async function addBulkStudents(e) {
@@ -748,7 +764,6 @@ async function addBulkStudents(e) {
   let nextAuto = parseInt(document.getElementById('start-number').value) || 1;
   const lines = document.getElementById('bulk-students').value.split('\n').map(l => l.trim()).filter(Boolean);
   if (!cls || !lines.length) { Swal.fire('แจ้งเตือน', 'ข้อมูลไม่ครบ', 'warning'); return; }
-
   const list = lines.map(line => {
     let id, name;
     const m = line.match(/^(\d+)\s+(.+)$/);
@@ -756,16 +771,13 @@ async function addBulkStudents(e) {
     else { id = String(nextAuto++); name = line; }
     return { student_id: String(id), student_name: name, student_class: cls };
   });
-
   showLoading(`กำลังเพิ่ม ${list.length} คน...`);
   try {
     const res = await callApi('addBulkStudents', { list });
     Swal.fire('สำเร็จ', `เพิ่ม ${res.added} คน${res.skipped ? ` (ข้ามซ้ำ ${res.skipped})` : ''}`, 'success');
     document.getElementById('bulk-add-form').reset();
     await loadAllDataFromSheet();
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 async function importStudents(e) {
@@ -773,7 +785,6 @@ async function importStudents(e) {
   const cls = document.getElementById('import-class').value;
   const raw = document.getElementById('import-data').value.split('\n').map(l => l.trim()).filter(Boolean);
   if (!cls || !raw.length) { Swal.fire('แจ้งเตือน', 'ข้อมูลไม่ครบ', 'warning'); return; }
-
   const list = [];
   raw.forEach(line => {
     let id, name;
@@ -785,30 +796,16 @@ async function importStudents(e) {
       const m = line.match(/^(\d+)[\.\)\-\:\s]+(.+)$/);
       if (m) { id = m[1]; name = m[2].trim(); }
     }
-    if (id && name && !isNaN(id)) {
-      list.push({ student_id: String(id), student_name: name, student_class: cls });
-    }
+    if (id && name && !isNaN(id)) list.push({ student_id: String(id), student_name: name, student_class: cls });
   });
-
   if (!list.length) { Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลที่ใช้ได้', 'warning'); return; }
-
   showLoading(`กำลังนำเข้า ${list.length} คน...`);
   try {
     const res = await callApi('addBulkStudents', { list });
     Swal.fire('สำเร็จ', `นำเข้า ${res.added} คน${res.skipped ? ` (ข้ามซ้ำ ${res.skipped})` : ''}`, 'success');
     document.getElementById('import-form').reset();
     await loadAllDataFromSheet();
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
-}
-
-/* ==================================================
-   ADD SUBJECT
-   ================================================== */
-function showSubjectMode(mode) {
-  document.querySelectorAll('.subject-mode').forEach(el => el.classList.add('hidden'));
-  document.getElementById(mode === 'single' ? 'single-subject-mode' : 'bulk-subject-mode')?.classList.remove('hidden');
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 async function addSubject(e) {
@@ -816,16 +813,13 @@ async function addSubject(e) {
   const name = document.getElementById('subject-name').value.trim();
   const cls = document.getElementById('subject-class').value;
   if (!name || !cls) { Swal.fire('แจ้งเตือน', 'กรอกข้อมูลให้ครบ', 'warning'); return; }
-
   showLoading('กำลังบันทึก...');
   try {
     await callApi('addSubject', { subject_name: name, subject_class: cls });
     Swal.fire('สำเร็จ', 'เพิ่มวิชาแล้ว', 'success');
     document.getElementById('add-subject-form').reset();
     await loadAllDataFromSheet();
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 async function addBulkSubjects(e) {
@@ -833,35 +827,24 @@ async function addBulkSubjects(e) {
   const cls = document.getElementById('bulk-subject-class').value;
   const names = document.getElementById('bulk-subjects').value.split('\n').map(l => l.trim()).filter(Boolean);
   if (!cls || !names.length) { Swal.fire('แจ้งเตือน', 'ข้อมูลไม่ครบ', 'warning'); return; }
-
   showLoading(`กำลังเพิ่ม ${names.length} วิชา...`);
   try {
     const res = await callApi('addBulkSubjects', { list: names, subject_class: cls });
     Swal.fire('สำเร็จ', `เพิ่ม ${res.added} วิชา${res.skipped ? ` (ข้ามซ้ำ ${res.skipped})` : ''}`, 'success');
     document.getElementById('bulk-subject-form').reset();
     await loadAllDataFromSheet();
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 /* ==================================================
-   MANAGE
+   MANAGE (Students / Subjects / Attendance)
    ================================================== */
-function showManageMode(mode) {
-  document.querySelectorAll('.manage-mode').forEach(el => el.classList.add('hidden'));
-  const map = { students:'manage-students-mode', subjects:'manage-subjects-mode', attendance:'manage-attendance-mode' };
-  document.getElementById(map[mode])?.classList.remove('hidden');
-  if (mode === 'students') loadStudentsData();
-  if (mode === 'subjects') loadSubjectsData();
-}
-
 function loadStudentsData() {
   const filter = normalizeClass(document.getElementById('filter-student-class').value);
   const c = document.getElementById('students-data-container');
   let list = allData.students.slice();
   if (filter) list = list.filter(s => normalizeClass(s.student_class) === filter);
-  list.sort((a, b) => (a.student_class || '').localeCompare(b.student_class || '') ||
+  list.sort((a,b) => (a.student_class||'').localeCompare(b.student_class||'') ||
     String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }));
 
   if (!list.length) {
@@ -869,9 +852,7 @@ function loadStudentsData() {
     return;
   }
   c.innerHTML = `
-    <div class="bg-gray-50 px-4 py-2 mb-3 rounded flex justify-between">
-      <span class="font-semibold">👨‍🎓 ${list.length} คน</span>
-    </div>
+    <div class="bg-gray-50 px-4 py-2 mb-3 rounded"><span class="font-semibold">👨‍🎓 ${list.length} คน</span></div>
     <div class="overflow-x-auto">
       <table class="w-full border-collapse text-sm">
         <thead><tr class="bg-green-600 text-white">
@@ -880,8 +861,7 @@ function loadStudentsData() {
           <th class="border px-3 py-2">ชั้น</th>
           <th class="border px-3 py-2">จัดการ</th>
         </tr></thead>
-        <tbody>
-        ${list.map(s => `
+        <tbody>${list.map(s => `
           <tr class="hover:bg-gray-50">
             <td class="border px-3 py-2 text-center font-semibold">${esc(s.student_id)}</td>
             <td class="border px-3 py-2">${esc(s.student_name)}</td>
@@ -901,8 +881,8 @@ function loadSubjectsData() {
   const c = document.getElementById('subjects-data-container');
   let list = allData.subjects.slice();
   if (filter) list = list.filter(s => normalizeClass(s.subject_class) === filter);
-  list.sort((a, b) => (a.subject_class || '').localeCompare(b.subject_class || '') || (a.subject_name || '').localeCompare(b.subject_name || ''));
-
+  list.sort((a,b) => (a.subject_class||'').localeCompare(b.subject_class||'') ||
+    (a.subject_name||'').localeCompare(b.subject_name||''));
   if (!list.length) {
     c.innerHTML = `<div class="text-center py-8 text-gray-500"><div class="text-6xl mb-3">📚</div><p>ไม่พบข้อมูลวิชา</p></div>`;
     return;
@@ -916,8 +896,7 @@ function loadSubjectsData() {
           <th class="border px-3 py-2">ชั้น</th>
           <th class="border px-3 py-2">จัดการ</th>
         </tr></thead>
-        <tbody>
-        ${list.map(s => `
+        <tbody>${list.map(s => `
           <tr class="hover:bg-gray-50">
             <td class="border px-3 py-2">${esc(s.subject_name)}</td>
             <td class="border px-3 py-2 text-center">${esc(s.subject_class)}</td>
@@ -945,6 +924,7 @@ async function editStudent(id) {
         <select id="sw-class" class="swal2-input">
           ${ALL_CLASSES.map(c => `<option ${normalizeClass(c) === normalizeClass(s.student_class) ? 'selected' : ''}>${c}</option>`).join('')}
         </select>
+        <p class="text-xs text-gray-500 mt-2">* ถ้าเปลี่ยนเลขที่/ชั้น ระบบจะอัปเดตประวัติการเช็คชื่อให้</p>
       </div>`,
     showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก',
     confirmButtonColor: '#dc2626',
@@ -957,16 +937,13 @@ async function editStudent(id) {
     }
   });
   if (!value) return;
-
   showLoading('กำลังบันทึก...');
   try {
     await callApi('updateStudent', { id, ...value });
     await loadAllDataFromSheet();
     loadStudentsData();
     Swal.fire('สำเร็จ', 'บันทึกแล้ว', 'success');
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 async function editSubject(id) {
@@ -992,16 +969,13 @@ async function editSubject(id) {
     }
   });
   if (!value) return;
-
   showLoading('กำลังบันทึก...');
   try {
     await callApi('updateSubject', { id, ...value });
     await loadAllDataFromSheet();
     loadSubjectsData();
     Swal.fire('สำเร็จ', 'บันทึกแล้ว', 'success');
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 async function deleteStudent(id) {
@@ -1009,21 +983,18 @@ async function deleteStudent(id) {
   const r = await Swal.fire({
     title: 'ลบนักเรียน?',
     html: `<p>${esc(s.student_id)}. ${esc(s.student_name)} (${esc(s.student_class)})</p>
-      <p class="text-red-600 text-sm mt-2">⚠️ การเช็คชื่อของนักเรียนคนนี้จะยังคงอยู่</p>`,
+      <p class="text-red-600 text-sm mt-2">⚠️ ประวัติการเช็คชื่อทั้งหมดของนักเรียนคนนี้จะถูกลบด้วย</p>`,
     icon: 'warning', showCancelButton: true, confirmButtonText: 'ลบ', cancelButtonText: 'ยกเลิก',
     confirmButtonColor: '#dc2626'
   });
   if (!r.isConfirmed) return;
-
   showLoading('กำลังลบ...');
   try {
     await callApi('deleteStudent', { id });
     await loadAllDataFromSheet();
     loadStudentsData();
     Swal.fire('สำเร็จ', 'ลบแล้ว', 'success');
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 async function deleteSubject(id) {
@@ -1035,16 +1006,13 @@ async function deleteSubject(id) {
     confirmButtonColor: '#dc2626'
   });
   if (!r.isConfirmed) return;
-
   showLoading('กำลังลบ...');
   try {
     await callApi('deleteSubject', { id });
     await loadAllDataFromSheet();
     loadSubjectsData();
     Swal.fire('สำเร็จ', 'ลบแล้ว', 'success');
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 function loadAttendanceData() {
@@ -1055,19 +1023,13 @@ function loadAttendanceData() {
   let list = allData.attendance.slice();
   if (date) list = list.filter(r => r.attendance_date === date);
   if (stat) list = list.filter(r => r.attendance_status === stat);
-  if (cls) {
-    const ids = allData.students.filter(s => normalizeClass(s.student_class) === cls).map(s => String(s.student_id));
-    list = list.filter(r => ids.includes(String(r.attendance_student_id)));
-  }
-  list.sort((a, b) => (b.attendance_date || '').localeCompare(a.attendance_date || ''));
+  if (cls) list = list.filter(r => normalizeClass(r.attendance_student_class) === cls);
+  list.sort((a,b) => (b.attendance_date||'').localeCompare(a.attendance_date||''));
 
   if (!list.length) {
     c.innerHTML = `<div class="text-center py-8 text-gray-500"><div class="text-6xl mb-3">📋</div><p>ไม่พบข้อมูล</p></div>`;
     return;
   }
-  const statusClass = { มา:'bg-green-100 text-green-800', สาย:'bg-yellow-100 text-yellow-800', ลา:'bg-blue-100 text-blue-800', ขาด:'bg-red-100 text-red-800' };
-  const icons = { มา:'✅', สาย:'⏰', ลา:'📝', ขาด:'❌' };
-
   c.innerHTML = `
     <div class="bg-gray-50 px-4 py-2 mb-3 rounded"><span class="font-semibold">📋 ${list.length} รายการ</span></div>
     <div class="overflow-x-auto">
@@ -1082,11 +1044,13 @@ function loadAttendanceData() {
           <th class="border px-3 py-2">หมายเหตุ</th>
           <th class="border px-3 py-2">จัดการ</th>
         </tr></thead>
-        <tbody>
-        ${list.map(r => {
-          const st = allData.students.find(s => String(s.student_id) === String(r.attendance_student_id));
-          const name = st ? st.student_name : 'ไม่พบข้อมูล';
-          const sclass = st ? st.student_class : '-';
+        <tbody>${list.map(r => {
+          const st = allData.students.find(s =>
+            String(s.student_id) === String(r.attendance_student_id) &&
+            normalizeClass(s.student_class) === normalizeClass(r.attendance_student_class));
+          const name = st ? st.student_name : (r.attendance_student_class ? 'ไม่พบข้อมูล' : '');
+          const sclass = r.attendance_student_class || (st ? st.student_class : '-');
+          const style = STATUS_STYLE[r.attendance_status] || { chip:'' };
           return `<tr class="hover:bg-gray-50">
             <td class="border px-3 py-2">${fmtThaiDate(r.attendance_date)}</td>
             <td class="border px-3 py-2 text-center">${esc(r.attendance_student_id)}</td>
@@ -1094,8 +1058,8 @@ function loadAttendanceData() {
             <td class="border px-3 py-2 text-center">${esc(sclass)}</td>
             <td class="border px-3 py-2">${esc(r.attendance_subject || '-')}</td>
             <td class="border px-3 py-2 text-center">
-              <span class="px-2 py-1 rounded-full text-xs ${statusClass[r.attendance_status] || ''}">
-                ${icons[r.attendance_status] || ''} ${esc(r.attendance_status)}
+              <span class="px-2 py-1 rounded-full text-xs ${style.chip}">
+                ${STATUS_ICON[r.attendance_status] || ''} ${esc(r.attendance_status)}
               </span>
             </td>
             <td class="border px-3 py-2 text-xs">${esc(r.attendance_notes || '-')}</td>
@@ -1104,20 +1068,21 @@ function loadAttendanceData() {
               <button onclick="deleteAttendance('${esc(r._id)}')" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs">🗑️</button>
             </td>
           </tr>`;
-        }).join('')}
-        </tbody>
+        }).join('')}</tbody>
       </table>
     </div>`;
 }
 
 async function editAttendance(id) {
   const r = allData.attendance.find(x => x._id === id); if (!r) return;
-  const st = allData.students.find(s => String(s.student_id) === String(r.attendance_student_id));
+  const st = allData.students.find(s =>
+    String(s.student_id) === String(r.attendance_student_id) &&
+    normalizeClass(s.student_class) === normalizeClass(r.attendance_student_class));
   const { value } = await Swal.fire({
     title: 'แก้ไขการเช็คชื่อ',
     html: `
       <div class="text-left">
-        <p class="mb-2"><strong>${esc(st?.student_name || '-')}</strong> — ${fmtThaiDate(r.attendance_date)}</p>
+        <p class="mb-2"><strong>${esc(st?.student_name || r.attendance_student_id)}</strong> — ${fmtThaiDate(r.attendance_date)}</p>
         <p class="mb-2">วิชา: ${esc(r.attendance_subject || '-')}</p>
         <label class="block text-sm mb-1">สถานะ</label>
         <select id="sw-status" class="swal2-input">
@@ -1134,31 +1099,29 @@ async function editAttendance(id) {
     })
   });
   if (!value) return;
-
   showLoading('กำลังบันทึก...');
   try {
     await callApi('updateAttendance', { id, ...value });
     await loadAllDataFromSheet();
     loadAttendanceData();
     Swal.fire('สำเร็จ', 'บันทึกแล้ว', 'success');
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 async function deleteAttendance(id) {
-  const r = await Swal.fire({ title: 'ลบรายการนี้?', icon: 'warning', showCancelButton: true, confirmButtonText: 'ลบ', cancelButtonText: 'ยกเลิก', confirmButtonColor: '#dc2626' });
+  const r = await Swal.fire({
+    title: 'ลบรายการนี้?', icon: 'warning',
+    showCancelButton: true, confirmButtonText: 'ลบ', cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#dc2626'
+  });
   if (!r.isConfirmed) return;
-
   showLoading('กำลังลบ...');
   try {
     await callApi('deleteAttendance', { id });
     await loadAllDataFromSheet();
     loadAttendanceData();
     Swal.fire('สำเร็จ', 'ลบแล้ว', 'success');
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
-  }
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 /* ==================================================
@@ -1171,7 +1134,9 @@ function toggleCustomDate() {
   if (p === 'custom') {
     const today = todayThaiStr();
     const w = new Date(); w.setDate(w.getDate() - 7);
-    document.getElementById('start-date').value = toThaiStr(w);
+    const wStr = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok',
+      year:'numeric', month:'2-digit', day:'2-digit' }).format(w);
+    document.getElementById('start-date').value = wStr;
     document.getElementById('end-date').value = today;
   }
 }
@@ -1182,15 +1147,24 @@ function getDateRange() {
   const now = new Date();
   switch (p) {
     case 'today': return { start: today, end: today };
-    case 'yesterday': { const y = new Date(now); y.setDate(y.getDate() - 1); const ys = toThaiStr(y); return { start: ys, end: ys }; }
+    case 'yesterday': {
+      const y = new Date(now); y.setDate(y.getDate() - 1);
+      const ys = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok',
+        year:'numeric', month:'2-digit', day:'2-digit' }).format(y);
+      return { start: ys, end: ys };
+    }
     case 'this-week': {
       const d = now.getDay(); const diff = d === 0 ? 6 : d - 1;
       const m = new Date(now); m.setDate(m.getDate() - diff);
-      return { start: toThaiStr(m), end: today };
+      const ms = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok',
+        year:'numeric', month:'2-digit', day:'2-digit' }).format(m);
+      return { start: ms, end: today };
     }
     case 'this-month': {
       const m = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { start: toThaiStr(m), end: today };
+      const ms = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok',
+        year:'numeric', month:'2-digit', day:'2-digit' }).format(m);
+      return { start: ms, end: today };
     }
     case 'custom': {
       const s = document.getElementById('start-date').value;
@@ -1211,20 +1185,20 @@ function loadStatistics() {
   if (cls) students = students.filter(s => normalizeClass(s.student_class) === cls);
 
   let attendance = allData.attendance.slice();
-  if (range) attendance = attendance.filter(r => r.attendance_date >= range.start && r.attendance_date <= range.end);
-  if (cls) {
-    const ids = students.map(s => String(s.student_id));
-    attendance = attendance.filter(r => ids.includes(String(r.attendance_student_id)));
-  }
+  if (range) attendance = attendance.filter(r =>
+    r.attendance_date >= range.start && r.attendance_date <= range.end);
+  if (cls) attendance = attendance.filter(r =>
+    normalizeClass(r.attendance_student_class) === cls);
 
-  const totalRec = attendance.length;
+  const total = attendance.length;
   const summary = {
-    มา: attendance.filter(r => r.attendance_status === 'มา').length,
+    มา:  attendance.filter(r => r.attendance_status === 'มา').length,
     สาย: attendance.filter(r => r.attendance_status === 'สาย').length,
-    ลา: attendance.filter(r => r.attendance_status === 'ลา').length,
+    ลา:  attendance.filter(r => r.attendance_status === 'ลา').length,
     ขาด: attendance.filter(r => r.attendance_status === 'ขาด').length
   };
-  const rate = totalRec ? (((summary.มา + summary.สาย) / totalRec) * 100).toFixed(1) : '0.0';
+  const ratePresent = total ? (((summary.มา + summary.สาย) / total) * 100).toFixed(1) : '0.0';
+  const rateOnly    = total ? ((summary.มา / total) * 100).toFixed(1) : '0.0';
   const days = [...new Set(attendance.map(r => r.attendance_date))].length;
 
   let html = `
@@ -1233,17 +1207,17 @@ function loadStatistics() {
         <div class="text-2xl font-bold text-blue-600">${students.length}</div>
         <div class="text-sm text-blue-700">นักเรียน</div></div>
       <div class="bg-purple-50 p-4 rounded-lg border border-purple-200 text-center">
-        <div class="text-2xl font-bold text-purple-600">${totalRec}</div>
+        <div class="text-2xl font-bold text-purple-600">${total}</div>
         <div class="text-sm text-purple-700">การเช็คชื่อ</div></div>
       <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200 text-center">
         <div class="text-2xl font-bold text-indigo-600">${days}</div>
         <div class="text-sm text-indigo-700">วัน</div></div>
       <div class="bg-teal-50 p-4 rounded-lg border border-teal-200 text-center">
-        <div class="text-2xl font-bold text-teal-600">${rate}%</div>
-        <div class="text-sm text-teal-700">อัตราการมา</div></div>
+        <div class="text-2xl font-bold text-teal-600">${rateOnly}% / ${ratePresent}%</div>
+        <div class="text-sm text-teal-700">มา / มา+สาย</div></div>
     </div>`;
 
-  if (!totalRec) {
+  if (!total) {
     html += `<div class="text-center py-8 bg-yellow-50 rounded-lg"><div class="text-6xl mb-3">📋</div><p class="text-yellow-700">ยังไม่มีข้อมูลการเช็คชื่อในช่วงนี้</p></div>`;
     c.innerHTML = html; return;
   }
@@ -1251,11 +1225,11 @@ function loadStatistics() {
   html += `
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
       ${STATUS_LIST.map(s => {
-        const colors = { มา:'green', สาย:'yellow', ลา:'blue', ขาด:'red' };
-        const pct = ((summary[s] / totalRec) * 100).toFixed(1);
-        return `<div class="bg-${colors[s]}-100 p-3 rounded-lg text-center border border-${colors[s]}-200">
-          <div class="text-2xl font-bold text-${colors[s]}-600">${summary[s]}</div>
-          <div class="text-sm text-${colors[s]}-700">${s} (${pct}%)</div>
+        const style = STATUS_STYLE[s];
+        const pct = ((summary[s] / total) * 100).toFixed(1);
+        return `<div class="${style.chip} p-3 rounded-lg text-center border">
+          <div class="text-2xl font-bold">${summary[s]}</div>
+          <div class="text-sm">${s} (${pct}%)</div>
         </div>`;
       }).join('')}
     </div>
@@ -1271,16 +1245,17 @@ function loadStatistics() {
           <th class="border px-3 py-2">ขาด</th>
           <th class="border px-3 py-2">รวม</th>
           <th class="border px-3 py-2">%</th>
-        </tr></thead>
-        <tbody>`;
+        </tr></thead><tbody>`;
 
-  students.sort((a, b) => String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }));
+  students.sort((a,b) => String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }));
   students.forEach(st => {
-    const recs = attendance.filter(r => String(r.attendance_student_id) === String(st.student_id));
+    const recs = attendance.filter(r =>
+      String(r.attendance_student_id) === String(st.student_id) &&
+      normalizeClass(r.attendance_student_class) === normalizeClass(st.student_class));
     const h = {
-      มา: recs.filter(r => r.attendance_status === 'มา').length,
+      มา:  recs.filter(r => r.attendance_status === 'มา').length,
       สาย: recs.filter(r => r.attendance_status === 'สาย').length,
-      ลา: recs.filter(r => r.attendance_status === 'ลา').length,
+      ลา:  recs.filter(r => r.attendance_status === 'ลา').length,
       ขาด: recs.filter(r => r.attendance_status === 'ขาด').length
     };
     const tot = h.มา + h.สาย + h.ลา + h.ขาด;
@@ -1305,49 +1280,57 @@ function loadStatistics() {
 /* ==================================================
    ADMIN
    ================================================== */
-function loadAdminInfo() {
+async function loadAdminInfo() {
   const connEl = document.getElementById('admin-conn-status');
   const sheetEl = document.getElementById('admin-current-sheet');
-  if (connEl) {
-    connEl.innerHTML = isConnected
-      ? '<span class="text-green-600 font-semibold">🟢 เชื่อมต่อได้</span>'
-      : '<span class="text-red-600 font-semibold">🔴 ยังไม่ได้เชื่อมต่อ</span>';
-  }
-  if (sheetEl) {
-    sheetEl.textContent = '1ya65apZf-4ODvqMFdswWsd0haSVoSvow0Xew633zF1w';
+  const schemaEl = document.getElementById('admin-schema-ver');
+  if (connEl) connEl.innerHTML = isConnected
+    ? '<span class="text-green-600 font-semibold">🟢 เชื่อมต่อได้</span>'
+    : '<span class="text-red-600 font-semibold">🔴 ยังไม่ได้เชื่อมต่อ</span>';
+  try {
+    const cfg = await callApi('getConfig');
+    if (sheetEl) sheetEl.textContent = cfg.sheetId || '-';
+    if (schemaEl) schemaEl.textContent = cfg.schemaVersion || '-';
+  } catch (e) {
+    if (sheetEl) sheetEl.textContent = '(ดึงไม่ได้)';
   }
 }
 
 async function updateSheetIdFromAdmin() {
   const sheetId = document.getElementById('admin-sheet-id').value.trim();
   const password = document.getElementById('admin-password').value;
-
-  if (!sheetId || !password) {
-    Swal.fire('แจ้งเตือน', 'กรุณากรอก Sheet ID และรหัสผ่าน', 'warning');
-    return;
-  }
-
+  if (!sheetId || !password) { Swal.fire('แจ้งเตือน', 'กรอกให้ครบ', 'warning'); return; }
   if (!/^[a-zA-Z0-9_-]{20,}$/.test(sheetId)) {
-    Swal.fire('แจ้งเตือน', 'Sheet ID ไม่ถูกต้อง (ต้องเป็นตัวอักษร/ตัวเลข 20 ตัวขึ้นไป)', 'warning');
-    return;
+    Swal.fire('แจ้งเตือน', 'Sheet ID ไม่ถูกต้อง', 'warning'); return;
   }
-
-  showLoading('กำลังบันทึก Sheet ID...');
+  showLoading('กำลังบันทึก...');
   try {
     await callApi('updateSheetId', { sheetId, password });
     document.getElementById('admin-password').value = '';
-    Swal.fire('สำเร็จ', 'อัปเดต Sheet ID แล้ว', 'success');
+    Swal.fire('สำเร็จ', 'อัปเดตแล้ว', 'success');
     await loadAllDataFromSheet();
     loadAdminInfo();
-  } catch (err) {
-    Swal.fire('ผิดพลาด', err.message, 'error');
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
+}
+
+async function changeAdminPassword() {
+  const oldPassword = document.getElementById('old-admin-pass').value;
+  const newPassword = document.getElementById('new-admin-pass').value;
+  if (!oldPassword || newPassword.length < 6) {
+    Swal.fire('แจ้งเตือน', 'กรอกรหัสเดิมและรหัสใหม่ (≥6 ตัว)', 'warning'); return;
   }
+  showLoading('กำลังเปลี่ยนรหัส...');
+  try {
+    await callApi('changeAdminPassword', { oldPassword, newPassword });
+    document.getElementById('old-admin-pass').value = '';
+    document.getElementById('new-admin-pass').value = '';
+    Swal.fire('สำเร็จ', 'เปลี่ยนรหัสแล้ว', 'success');
+  } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
 }
 
 async function testConnection() {
   const resultEl = document.getElementById('test-result');
   resultEl.innerHTML = '<span class="text-yellow-600">⏳ กำลังทดสอบ...</span>';
-
   try {
     const data = await callApi('getAllData');
     resultEl.innerHTML = `
@@ -1363,10 +1346,10 @@ async function testConnection() {
         <p class="font-semibold text-red-700">❌ เชื่อมต่อไม่ได้</p>
         <p class="text-sm mt-1">${esc(err.message)}</p>
         <p class="text-xs text-gray-600 mt-2">ตรวจสอบ:<br>
-          1. Deploy Web App แล้วหรือยัง<br>
-          2. ตั้ง "Who has access: Anyone"<br>
-          3. URL ใน WEB_APP_URL ถูกต้อง<br>
-          4. รันฟังก์ชัน setup() ใน Apps Script แล้ว</p>
+          1. Deploy Web App และตั้ง "Anyone"<br>
+          2. URL ใน WEB_APP_URL ถูกต้อง<br>
+          3. รัน setup() แล้ว และใส่ API_TOKEN ใน index.html<br>
+          4. Sheet ID ใน setup() ถูกต้อง</p>
       </div>`;
   }
 }
@@ -1378,9 +1361,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAllClassSelects();
   document.getElementById('attendance-date').value = todayThaiStr();
   document.getElementById('attendance-class').addEventListener('change', updateSubjectDropdown);
-
+  if (API_TOKEN === 'PASTE_YOUR_API_TOKEN_HERE') {
+    console.warn('⚠️ ยังไม่ได้ตั้งค่า API_TOKEN — ระบบจะทำงานไม่ได้');
+  }
   await loadAllDataFromSheet();
-
   if (!isConnected) {
     setTimeout(() => {
       Swal.fire({
@@ -1388,16 +1372,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         title: 'ยังเชื่อมต่อ Sheet ไม่ได้',
         html: `
           <div class="text-left text-sm">
-            <p class="mb-2">ตรวจสอบตามลำดับ:</p>
+            <p class="mb-2">ตรวจสอบ:</p>
             <ol class="list-decimal pl-4 space-y-1">
               <li>รัน <code>setup()</code> ใน Apps Script แล้วหรือยัง</li>
-              <li>Deploy Web App ด้วย <b>Anyone</b> แล้วหรือยัง</li>
+              <li>เอา <b>API Token</b> จาก Log มาใส่ <code>const API_TOKEN</code> ใน index.html</li>
+              <li>Deploy Web App ด้วย <b>Anyone</b></li>
               <li>URL ตรงกับ <code>WEB_APP_URL</code> หรือไม่</li>
             </ol>
-            <p class="mt-3">ลองกด <b>"🔐 Admin" → "🔌 ทดสอบเชื่อมต่อ"</b></p>
+            <p class="mt-3">ทดสอบ: <b>"🔐 Admin" → "🔌 ทดสอบเชื่อมต่อ"</b></p>
           </div>`,
-        confirmButtonColor: '#dc2626',
-        confirmButtonText: 'เข้าใจแล้ว'
+        confirmButtonColor: '#dc2626', confirmButtonText: 'เข้าใจแล้ว'
       });
     }, 1000);
   }

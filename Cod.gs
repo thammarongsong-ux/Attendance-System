@@ -3,6 +3,7 @@
 // ==================================================
 const PROP_KEY_SHEET_ID = 'SHEET_ID';
 const PROP_KEY_ADMIN_HASH = 'ADMIN_PASSWORD_HASH';
+const CLASS_LIST = ['ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6', 'ม.1', 'ม.2', 'ม.3'];
 
 // โครงตารางของแต่ละชีต (ใช้ตอนสร้างชีตใหม่เท่านั้น)
 const SHEET_DEFS = {
@@ -36,12 +37,28 @@ function setup() {
 // สร้างชีตที่ยังไม่มี พร้อมหัวตาราง
 function ensureSheets_() {
   const ss = getSpreadsheet_();
-  Object.keys(SHEET_DEFS).forEach(function (name) {
+  const kinds = Object.keys(SHEET_DEFS);
+  kinds.forEach(function (name) {
     if (!ss.getSheetByName(name)) {
       const headers = SHEET_DEFS[name];
       ss.insertSheet(name).getRange(1, 1, 1, headers.length).setValues([headers]);
       Logger.log('🆕 สร้างชีตใหม่: ' + name);
     }
+  });
+  // เตรียมแท็บแยกตามชั้นสำหรับข้อมูลใหม่
+  CLASS_LIST.forEach(function (cls) {
+    kinds.forEach(function (kind) {
+      const name = classSheetName_(kind, cls);
+      let sh = ss.getSheetByName(name);
+      if (!sh) sh = ss.insertSheet(name);
+      const headers = kind === 'Attendance'
+        ? SHEET_DEFS[kind].concat(['attendance_student_class'])
+        : SHEET_DEFS[kind];
+      if (sh.getLastRow() === 0) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+      else if (kind === 'Attendance' && sh.getLastColumn() < headers.length) {
+        sh.getRange(1, headers.length).setValue(headers[headers.length - 1]);
+      }
+    });
   });
 }
 
@@ -88,6 +105,20 @@ function normalizeDate_(v) {
   return String(v);
 }
 
+function normalizeClass_(c) {
+  if (!c) return '';
+  let s = String(c).toLowerCase().replace(/\s+/g, '').replace(/ชั้น/g, '');
+  s = s.replace(/[๐-๙]/g, function (d) {
+    return String.fromCharCode(d.charCodeAt(0) - 0x0E50 + 48);
+  });
+  const match = s.match(/(?:ป\.|ประถม|ปีที่|ม\.|มัธยม|ที่)?(\d+)/);
+  if (!match) return s;
+  const number = match[1];
+  if (s.indexOf('ม.') !== -1 || s.indexOf('มัธยม') !== -1) return 'ม.' + number;
+  if (s.indexOf('ป.') !== -1 || s.indexOf('ประถม') !== -1) return 'ป.' + number;
+  return number;
+}
+
 // ==================================================
 // WEB APP ENTRY POINT
 // ==================================================
@@ -123,18 +154,18 @@ function doPost(e) {
 
 function handleAction_(action, data) {
   switch (action) {
-    case 'getAllData':       return getAllData_();
-    case 'addStudent':       return addStudent_(data); 
-    case 'addBulkStudents':  return addBulkStudents_(data); 
-    case 'updateStudent':    return updateStudent_(data); 
-    case 'deleteStudent':    return deleteStudent_(data.id); 
-    case 'addSubject':       return addSubject_(data); 
-    case 'addBulkSubjects':  return addBulkSubjects_(data); 
-    case 'updateSubject':    return updateSubject_(data); 
-    case 'deleteSubject':    return deleteSubject_(data.id); 
-    case 'saveAttendance':   return saveAttendance_(data); 
-    case 'updateAttendance': return updateAttendance_(data); 
-    case 'deleteAttendance': return deleteAttendance_(data.id); 
+    case 'getAllData':       return getAllDataByClass_();
+    case 'addStudent':       return addStudentByClass_(data);
+    case 'addBulkStudents':  return addBulkStudentsByClass_(data);
+    case 'updateStudent':    return updateStudentByClass_(data);
+    case 'deleteStudent':    return deleteByClassId_(data.id, 'STU_');
+    case 'addSubject':       return addSubjectByClass_(data);
+    case 'addBulkSubjects':  return addBulkSubjectsByClass_(data);
+    case 'updateSubject':    return updateSubjectByClass_(data);
+    case 'deleteSubject':    return deleteByClassId_(data.id, 'SUB_');
+    case 'saveAttendance':   return saveAttendanceByClass_(data);
+    case 'updateAttendance': return updateAttendanceByClass_(data);
+    case 'deleteAttendance': return deleteByClassId_(data.id, 'ATT_'); 
     case 'updateSheetId':
       if (!verifyAdmin_(data.password)) throw new Error('รหัสผ่าน Admin ไม่ถูกต้อง');
       PropertiesService.getScriptProperties().setProperty(PROP_KEY_SHEET_ID, data.sheetId);
@@ -341,4 +372,370 @@ function deleteAttendance_(id) {
   if (isNaN(rowIndex)) throw new Error('ID ไม่ถูกต้อง');
   sh.deleteRow(rowIndex);
   return { ok: true };
+}
+
+// ==================================================
+// CLASS-SCOPED TABS (new API implementation)
+// ==================================================
+// Existing tabs are read together with class tabs. New records are written to the
+// matching class tab; old tabs stay intact until migrateExistingDataToClassTabs()
+// verifies every row has a destination.
+function classSheetName_(baseName, cls) {
+  const normalized = normalizeClass_(cls);
+  if (CLASS_LIST.indexOf(normalized) === -1) throw new Error('ชั้นเรียนไม่ถูกต้อง: ' + cls);
+  return baseName + '-' + normalized;
+}
+
+function dataSheetEntries_(baseName) {
+  const ss = getSpreadsheet_();
+  const entries = [];
+  const legacy = ss.getSheetByName(baseName);
+  if (legacy) entries.push({ name: baseName, cls: '', sheet: legacy });
+  CLASS_LIST.forEach(function (cls) {
+    const name = baseName + '-' + cls;
+    const sh = ss.getSheetByName(name);
+    if (sh) entries.push({ name: name, cls: cls, sheet: sh });
+  });
+  return entries;
+}
+
+function ensureClassSheet__(baseName, cls) {
+  const name = classSheetName_(baseName, cls);
+  const ss = getSpreadsheet_();
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  let headers = SHEET_DEFS[baseName].slice();
+  if (baseName === 'Attendance') headers.push('attendance_student_class');
+  if (sh.getLastRow() === 0) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  else if (baseName === 'Attendance' && sh.getLastColumn() < headers.length) {
+    sh.getRange(1, headers.length).setValue(headers[headers.length - 1]);
+  }
+  return sh;
+}
+
+function encodeRowId_(prefix, row, sheetName) {
+  return prefix + row + '@' + sheetName;
+}
+
+function decodeRowId_(id, prefix, legacySheet) {
+  const value = String(id || '');
+  if (value.indexOf(prefix) !== 0) throw new Error('ID ไม่ถูกต้อง');
+  const body = value.slice(prefix.length);
+  const parts = body.split('@');
+  const row = parseInt(parts[0], 10);
+  const sheetName = parts.length > 1 ? parts.slice(1).join('@') : legacySheet;
+  if (!Number.isInteger(row) || row < 2 || !sheetName) throw new Error('ID ไม่ถูกต้อง');
+  const sh = getSpreadsheet_().getSheetByName(sheetName);
+  if (!sh) throw new Error('ไม่พบแท็บข้อมูล ' + sheetName + ' กรุณารีเฟรชข้อมูล');
+  return { row: row, sheet: sh, sheetName: sheetName };
+}
+
+function appendUnique_(sh, row, keyCols) {
+  const vals = sh.getDataRange().getValues();
+  const key = keyCols.map(function (i) { return String(row[i] == null ? '' : row[i]); }).join('|');
+  const exists = vals.slice(1).some(function (r) {
+    return keyCols.map(function (i) { return String(r[i] == null ? '' : r[i]); }).join('|') === key;
+  });
+  if (!exists) sh.appendRow(row);
+  return !exists;
+}
+
+function getAllDataByClass_() {
+  const result = { students: [], subjects: [], attendance: [] };
+  const studentClasses = {};
+  const subjectClasses = {};
+  dataSheetEntries_('Students').forEach(function (entry) {
+    entry.sheet.getDataRange().getValues().slice(1).forEach(function (r, i) {
+      if (!r || String(r[0]) === '') return;
+      const cls = normalizeClass_(r[2] || entry.cls);
+      result.students.push({
+        _id: encodeRowId_('STU_', i + 2, entry.name),
+        student_id: String(r[0]), student_name: String(r[1]), student_class: cls,
+        created_at: r[3] ? String(r[3]) : ''
+      });
+      const studentKey = String(r[0]);
+      if (!studentClasses[studentKey]) studentClasses[studentKey] = [];
+      if (cls && studentClasses[studentKey].indexOf(cls) === -1) studentClasses[studentKey].push(cls);
+    });
+  });
+
+  dataSheetEntries_('Subjects').forEach(function (entry) {
+    entry.sheet.getDataRange().getValues().slice(1).forEach(function (r, i) {
+      if (!r || String(r[0]) === '') return;
+      const cls = normalizeClass_(r[1] || entry.cls);
+      result.subjects.push({
+        _id: encodeRowId_('SUB_', i + 2, entry.name),
+        subject_name: String(r[0]), subject_class: cls,
+        created_at: r[2] ? String(r[2]) : ''
+      });
+      const subjectKey = String(r[0]);
+      if (!subjectClasses[subjectKey]) subjectClasses[subjectKey] = [];
+      if (cls && subjectClasses[subjectKey].indexOf(cls) === -1) subjectClasses[subjectKey].push(cls);
+    });
+  });
+
+  dataSheetEntries_('Attendance').forEach(function (entry) {
+    entry.sheet.getDataRange().getValues().slice(1).forEach(function (r, i) {
+      if (!r || !r[0]) return;
+      let cls = normalizeClass_(r[6] || entry.cls || '');
+      if (!cls) {
+        const knownStudentClasses = studentClasses[String(r[1])] || [];
+        const knownSubjectClasses = subjectClasses[String(r[2])] || [];
+        const candidates = knownStudentClasses.filter(function (c) { return knownSubjectClasses.indexOf(c) !== -1; });
+        if (candidates.length === 1) cls = candidates[0];
+        else if (knownStudentClasses.length === 1) cls = knownStudentClasses[0];
+      }
+      result.attendance.push({
+        _id: encodeRowId_('ATT_', i + 2, entry.name),
+        attendance_date: normalizeDate_(r[0]), attendance_student_id: String(r[1]),
+        attendance_subject: String(r[2]), attendance_status: String(r[3]),
+        attendance_notes: String(r[4] || ''), created_at: r[5] ? String(r[5]) : '',
+        attendance_student_class: cls || ''
+      });
+    });
+  });
+
+  // A migration may leave legacy tabs visible until every row is safely assigned.
+  // Prefer class-tab rows and suppress duplicates while retaining unresolved legacy records.
+  result.students = dedupeRows_(result.students, function (r) { return normalizeClass_(r.student_class) + '|' + r.student_id; });
+  result.subjects = dedupeRows_(result.subjects, function (r) { return normalizeClass_(r.subject_class) + '|' + r.subject_name; });
+  result.attendance = dedupeRows_(result.attendance, function (r) {
+    const cls = normalizeClass_(r.attendance_student_class);
+    // Keep ambiguous legacy rows distinct; their class cannot safely form a dedupe key.
+    return cls
+      ? cls + '|' + r.attendance_date + '|' + r.attendance_student_id + '|' + r.attendance_subject
+      : 'legacy|' + r._id;
+  });
+  return result;
+}
+
+function dedupeRows_(rows, keyOf) {
+  const index = {};
+  rows.forEach(function (row) { index[keyOf(row)] = row; });
+  return Object.keys(index).map(function (key) { return index[key]; });
+}
+
+function addStudentByClass_(data) {
+  const cls = normalizeClass_(data.student_class);
+  const dup = getAllDataByClass_().students.some(function (s) {
+    return s.student_id === String(data.student_id) && normalizeClass_(s.student_class) === cls;
+  });
+  if (dup) throw new Error('มีนักเรียนเลขที่นี้ในชั้นนี้แล้ว');
+  ensureClassSheet__('Students', cls).appendRow([data.student_id, data.student_name, cls, new Date()]);
+  return { ok: true };
+}
+
+function addBulkStudentsByClass_(data) {
+  const result = { ok: true, added: 0, skipped: 0 };
+  (data.list || []).forEach(function (student) {
+    try {
+      addStudentByClass_(student);
+      result.added++;
+    } catch (err) {
+      if (String(err.message).indexOf('ซ้ำ') !== -1) result.skipped++;
+      else throw err;
+    }
+  });
+  return result;
+}
+
+function updateStudentByClass_(data) {
+  const loc = decodeRowId_(data.id, 'STU_', 'Students');
+  const row = loc.sheet.getRange(loc.row, 1, 1, 4).getValues()[0];
+  if (!row || String(row[0]) === '') throw new Error('ไม่พบข้อมูลนักเรียน กรุณารีเฟรช');
+  const cls = normalizeClass_(data.student_class);
+  const duplicate = getAllDataByClass_().students.some(function (s) {
+    return s._id !== data.id && String(s.student_id) === String(data.student_id) && normalizeClass_(s.student_class) === cls;
+  });
+  if (duplicate) throw new Error('เลขที่ซ้ำในชั้นนี้');
+  const destName = classSheetName_('Students', cls);
+  if (loc.sheetName === destName) {
+    loc.sheet.getRange(loc.row, 1, 1, 4).setValues([[data.student_id, data.student_name, cls, row[3]]]);
+  } else {
+    ensureClassSheet__('Students', cls).appendRow([data.student_id, data.student_name, cls, row[3] || new Date()]);
+    loc.sheet.deleteRow(loc.row);
+  }
+  return { ok: true };
+}
+
+function addSubjectByClass_(data) {
+  const cls = normalizeClass_(data.subject_class);
+  const duplicate = getAllDataByClass_().subjects.some(function (s) {
+    return String(s.subject_name) === String(data.subject_name) && normalizeClass_(s.subject_class) === cls;
+  });
+  if (duplicate) throw new Error('มีวิชานี้ในชั้นนี้แล้ว');
+  ensureClassSheet__('Subjects', cls).appendRow([data.subject_name, cls, new Date()]);
+  return { ok: true };
+}
+
+function addBulkSubjectsByClass_(data) {
+  const result = { ok: true, added: 0, skipped: 0 };
+  (data.list || []).forEach(function (name) {
+    try {
+      addSubjectByClass_({ subject_name: name, subject_class: data.subject_class });
+      result.added++;
+    } catch (err) {
+      if (String(err.message).indexOf('ซ้ำ') !== -1) result.skipped++;
+      else throw err;
+    }
+  });
+  return result;
+}
+
+function updateSubjectByClass_(data) {
+  const loc = decodeRowId_(data.id, 'SUB_', 'Subjects');
+  const row = loc.sheet.getRange(loc.row, 1, 1, 3).getValues()[0];
+  if (!row || String(row[0]) === '') throw new Error('ไม่พบข้อมูลวิชา กรุณารีเฟรช');
+  const cls = normalizeClass_(data.subject_class);
+  const duplicate = getAllDataByClass_().subjects.some(function (s) {
+    return s._id !== data.id && String(s.subject_name) === String(data.subject_name) && normalizeClass_(s.subject_class) === cls;
+  });
+  if (duplicate) throw new Error('วิชาซ้ำในชั้นนี้');
+  const destName = classSheetName_('Subjects', cls);
+  if (loc.sheetName === destName) {
+    loc.sheet.getRange(loc.row, 1, 1, 3).setValues([[data.subject_name, cls, row[2]]]);
+  } else {
+    ensureClassSheet__('Subjects', cls).appendRow([data.subject_name, cls, row[2] || new Date()]);
+    loc.sheet.deleteRow(loc.row);
+  }
+  return { ok: true };
+}
+
+function deleteByClassId_(id, prefix) {
+  const baseName = prefix === 'STU_' ? 'Students' : prefix === 'SUB_' ? 'Subjects' : 'Attendance';
+  const loc = decodeRowId_(id, prefix, baseName);
+  if (loc.row > loc.sheet.getLastRow()) throw new Error('ไม่พบข้อมูล กรุณารีเฟรช');
+  loc.sheet.deleteRow(loc.row);
+  return { ok: true };
+}
+
+function saveAttendanceByClass_(records) {
+  if (!Array.isArray(records)) throw new Error('รูปแบบข้อมูลการเช็คชื่อไม่ถูกต้อง');
+  const existing = getAllDataByClass_().attendance;
+  let inserted = 0, updated = 0;
+  records.forEach(function (record) {
+    const cls = normalizeClass_(record.cls || '');
+    if (CLASS_LIST.indexOf(cls) === -1) throw new Error('ต้องระบุชั้นเรียนให้ถูกต้องก่อนบันทึก');
+    const match = existing.find(function (r) {
+      return r.attendance_date === normalizeDate_(record.date) &&
+        String(r.attendance_student_id) === String(record.student_id) &&
+        String(r.attendance_subject) === String(record.subject) &&
+        normalizeClass_(r.attendance_student_class) === cls;
+    });
+    if (match) {
+      const loc = decodeRowId_(match._id, 'ATT_', 'Attendance');
+      loc.sheet.getRange(loc.row, 4, 1, 2).setValues([[record.status, record.notes || '']]);
+      if (!match.attendance_student_class && loc.sheet.getLastColumn() < 7) {
+        loc.sheet.getRange(1, 7).setValue('attendance_student_class');
+      }
+      if (!match.attendance_student_class) loc.sheet.getRange(loc.row, 7).setValue(cls);
+      updated++;
+    } else {
+      ensureClassSheet__('Attendance', cls).appendRow([
+        record.date, String(record.student_id), record.subject, record.status,
+        record.notes || '', new Date(), cls
+      ]);
+      inserted++;
+    }
+  });
+  return { ok: true, inserted: inserted, updated: updated };
+}
+
+function updateAttendanceByClass_(data) {
+  const loc = decodeRowId_(data.id, 'ATT_', 'Attendance');
+  if (loc.row > loc.sheet.getLastRow()) throw new Error('ไม่พบข้อมูลรายการ กรุณารีเฟรช');
+  loc.sheet.getRange(loc.row, 4, 1, 2).setValues([[data.attendance_status, data.attendance_notes || '']]);
+  return { ok: true };
+}
+
+// One-time safe migration: copies data to per-class tabs and archives legacy tabs
+// only if every source row was assigned. Unassigned rows remain in the original tab.
+function migrateExistingDataToClassTabs() {
+  const ss = getSpreadsheet_();
+  const report = { students: 0, subjects: 0, attendance: 0, unresolved: [] };
+  const studentClasses = {};
+  const subjectClasses = {};
+  let canArchive = { Students: true, Subjects: true, Attendance: true };
+
+  const studentsSheet = ss.getSheetByName('Students');
+  if (studentsSheet && studentsSheet.getLastRow() > 1) {
+    studentsSheet.getDataRange().getValues().slice(1).forEach(function (r) {
+      if (!r || String(r[0]) === '') return;
+      const cls = normalizeClass_(r[2]);
+      if (CLASS_LIST.indexOf(cls) === -1) { canArchive.Students = false; report.unresolved.push('นักเรียน ' + r[0] + ': ชั้นไม่ถูกต้อง'); return; }
+      const dest = ensureClassSheet__('Students', cls);
+      if (appendUnique_(dest, [r[0], r[1], cls, r[3]], [0])) report.students++;
+      const key = String(r[0]);
+      if (!studentClasses[key]) studentClasses[key] = [];
+      if (studentClasses[key].indexOf(cls) === -1) studentClasses[key].push(cls);
+    });
+  }
+  // Include already split students when resolving attendance rows.
+  dataSheetEntries_('Students').filter(function (x) { return x.name !== 'Students'; }).forEach(function (entry) {
+    entry.sheet.getDataRange().getValues().slice(1).forEach(function (r) {
+      if (!r || String(r[0]) === '') return;
+      const cls = normalizeClass_(r[2] || entry.cls);
+      const key = String(r[0]);
+      if (!studentClasses[key]) studentClasses[key] = [];
+      if (studentClasses[key].indexOf(cls) === -1) studentClasses[key].push(cls);
+    });
+  });
+
+  const subjectsSheet = ss.getSheetByName('Subjects');
+  if (subjectsSheet && subjectsSheet.getLastRow() > 1) {
+    subjectsSheet.getDataRange().getValues().slice(1).forEach(function (r) {
+      if (!r || String(r[0]) === '') return;
+      const cls = normalizeClass_(r[1]);
+      if (CLASS_LIST.indexOf(cls) === -1) { canArchive.Subjects = false; report.unresolved.push('วิชา ' + r[0] + ': ชั้นไม่ถูกต้อง'); return; }
+      const dest = ensureClassSheet__('Subjects', cls);
+      if (appendUnique_(dest, [r[0], cls, r[2]], [0])) report.subjects++;
+      const key = String(r[0]);
+      if (!subjectClasses[key]) subjectClasses[key] = [];
+      if (subjectClasses[key].indexOf(cls) === -1) subjectClasses[key].push(cls);
+    });
+  }
+  dataSheetEntries_('Subjects').filter(function (x) { return x.name !== 'Subjects'; }).forEach(function (entry) {
+    entry.sheet.getDataRange().getValues().slice(1).forEach(function (r) {
+      if (!r || String(r[0]) === '') return;
+      const cls = normalizeClass_(r[1] || entry.cls);
+      const key = String(r[0]);
+      if (!subjectClasses[key]) subjectClasses[key] = [];
+      if (subjectClasses[key].indexOf(cls) === -1) subjectClasses[key].push(cls);
+    });
+  });
+
+  const attendanceSheet = ss.getSheetByName('Attendance');
+  if (attendanceSheet && attendanceSheet.getLastRow() > 1) {
+    attendanceSheet.getDataRange().getValues().slice(1).forEach(function (r) {
+      if (!r || !r[0]) return;
+      let cls = normalizeClass_(r[6] || '');
+      if (!cls) {
+        const sc = studentClasses[String(r[1])] || [];
+        const sub = subjectClasses[String(r[2])] || [];
+        const candidates = sc.filter(function (candidate) { return sub.indexOf(candidate) !== -1; });
+        if (candidates.length === 1) cls = candidates[0];
+        else if (sc.length === 1) cls = sc[0];
+      }
+      if (CLASS_LIST.indexOf(cls) === -1) {
+        canArchive.Attendance = false;
+        report.unresolved.push('เช็คชื่อ ' + normalizeDate_(r[0]) + ' เลขที่ ' + r[1] + ' วิชา ' + r[2] + ': ระบุชั้นไม่ได้');
+        return;
+      }
+      const dest = ensureClassSheet__('Attendance', cls);
+      const dataRow = [r[0], r[1], r[2], r[3], r[4] || '', r[5] || new Date(), cls];
+      if (appendUnique_(dest, dataRow, [0, 1, 2])) report.attendance++;
+    });
+  }
+
+  ['Students', 'Subjects', 'Attendance'].forEach(function (name) {
+    const source = ss.getSheetByName(name);
+    const mayArchive = name === 'Attendance' ? canArchive.Attendance : canArchive[name];
+    if (source && mayArchive) {
+      source.setName(name + ' (Archive)');
+      Logger.log('เก็บแท็บเดิมเป็นสำรอง: ' + name + ' (Archive)');
+    }
+  });
+  report.unresolvedCount = report.unresolved.length;
+  Logger.log(JSON.stringify(report));
+  return report;
 }

@@ -380,7 +380,7 @@
           <select id="filter-status" class="field">
             <option value="">ทั้งหมด</option><option value="มา">✅ มา</option><option value="สาย">⏰ สาย</option><option value="ลา">📝 ลา</option><option value="ขาด">❌ ขาด</option>
           </select></div>
-        <div class="flex items-end"><button onclick="loadAttendanceData()" class="w-full bg-red-600 hover:bg-red-700 text-white btn w-full>🔍 โหลด</button></div>
+        <div class="flex items-end"><button onclick="loadAttendanceData()" class="w-full bg-red-600 hover:bg-red-700 text-white btn">🔍 โหลด</button></div>
       </div>
       <div id="attendance-data-container">
         <div class="text-center py-8 text-gray-500">กดปุ่ม "โหลด" เพื่อดูข้อมูล</div>
@@ -504,6 +504,21 @@ function normalizeAttendanceRow(r) {
     attendance_notes:   r.attendance_status || '',
     created_at:         r.attendance_notes || r.created_at || ''
   });
+}
+
+// Match attendance to its class. New class tabs provide the class explicitly;
+// the student lookup keeps compatibility with older API payloads.
+function attendanceMatchesClass(record, cls) {
+  const target = normalizeClass(cls);
+  if (!target) return true;
+  const recordClass = normalizeClass(record.attendance_student_class || '');
+  // Older deployed API versions placed the subject name in this field. Trust it
+  // only when it is one of the configured classes; otherwise resolve via student.
+  if (ALL_CLASSES.some(c => normalizeClass(c) === recordClass)) return recordClass === target;
+  return allData.students.some(s =>
+    String(s.student_id) === String(record.attendance_student_id) &&
+    normalizeClass(s.student_class) === target
+  );
 }
 
 function setConnectionStatus(type, msg) {
@@ -711,7 +726,8 @@ function loadStudentsForAttendance() {
 
   const existingCount = allData.attendance.filter(r =>
     r.attendance_date === date && r.attendance_subject === subject &&
-    students.some(s => String(s.student_id) === String(r.attendance_student_id))
+    students.some(s => String(s.student_id) === String(r.attendance_student_id)) &&
+    attendanceMatchesClass(r, cls)
   ).length;
 
   let html = `
@@ -737,11 +753,14 @@ function loadStudentsForAttendance() {
     const rec = allData.attendance.find(r =>
       r.attendance_date === date &&
       String(r.attendance_student_id) === String(st.student_id) &&
-      r.attendance_subject === subject
+      r.attendance_subject === subject &&
+      attendanceMatchesClass(r, cls)
     );
     const curStatus = rec ? rec.attendance_status : '';
     const curNotes  = rec ? (rec.attendance_notes || '') : '';
-    const history = allData.attendance.filter(r => String(r.attendance_student_id) === String(st.student_id));
+    const history = allData.attendance.filter(r =>
+      String(r.attendance_student_id) === String(st.student_id) && attendanceMatchesClass(r, st.student_class)
+    );
     const h = {
       มา: history.filter(r => r.attendance_status === 'มา').length,
       สาย: history.filter(r => r.attendance_status === 'สาย').length,
@@ -786,7 +805,7 @@ function loadStudentsForAttendance() {
 
   html += `</div>
     <div class="mt-6 text-center">
-      <button onclick="saveAttendance()" class="bg-red-600 hover:bg-red-700 text-white btn text-lg>💾 บันทึกการเช็คชื่อ</button>
+      <button onclick="saveAttendance()" class="btn w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white text-base sm:text-lg">💾 บันทึกการเช็คชื่อ</button>
     </div>`;
 
   list.innerHTML = html;
@@ -833,7 +852,8 @@ async function saveAttendance() {
       student_id: st.student_id,
       subject,
       status: radio.value,
-      notes: notesInput ? notesInput.value.trim() : ''
+      notes: notesInput ? notesInput.value.trim() : '',
+      cls: st.student_class // ชั้นของนักเรียน → ให้ backend แยกเก็บคนละชีตตามชั้น (เวอร์ชันเก่าจะเมินฟิลด์นี้)
     });
   });
 
@@ -1190,10 +1210,7 @@ function loadAttendanceData() {
   let list = allData.attendance.slice();
   if (date) list = list.filter(r => r.attendance_date === date);
   if (stat) list = list.filter(r => r.attendance_status === stat);
-  if (cls) {
-    const ids = allData.students.filter(s => normalizeClass(s.student_class) === cls).map(s => String(s.student_id));
-    list = list.filter(r => ids.includes(String(r.attendance_student_id)));
-  }
+  if (cls) list = list.filter(r => attendanceMatchesClass(r, cls));
   list.sort((a, b) => (b.attendance_date || '').localeCompare(a.attendance_date || ''));
 
   if (!list.length) {
@@ -1348,10 +1365,7 @@ function loadStatistics() {
 
   let attendance = allData.attendance.slice();
   if (range) attendance = attendance.filter(r => r.attendance_date >= range.start && r.attendance_date <= range.end);
-  if (cls) {
-    const ids = students.map(s => String(s.student_id));
-    attendance = attendance.filter(r => ids.includes(String(r.attendance_student_id)));
-  }
+  if (cls) attendance = attendance.filter(r => attendanceMatchesClass(r, cls));
   if (subject) attendance = attendance.filter(r => r.attendance_subject === subject);
 
   // แสดงตัวกรองที่ใช้งานอยู่เหนือผลลัพธ์
@@ -1476,7 +1490,9 @@ function loadStatistics() {
 
   students.sort((a, b) => String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }));
   students.forEach(st => {
-    const recs = attendance.filter(r => String(r.attendance_student_id) === String(st.student_id));
+    const recs = attendance.filter(r =>
+      String(r.attendance_student_id) === String(st.student_id) && attendanceMatchesClass(r, st.student_class)
+    );
     const h = {
       มา: recs.filter(r => r.attendance_status === 'มา').length,
       สาย: recs.filter(r => r.attendance_status === 'สาย').length,

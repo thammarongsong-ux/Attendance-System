@@ -3,6 +3,14 @@
 // ==================================================
 const PROP_KEY_SHEET_ID = 'SHEET_ID';
 const PROP_KEY_ADMIN_HASH = 'ADMIN_PASSWORD_HASH';
+const PROP_KEY_LOGIN_USERNAME = 'APP_LOGIN_USERNAME';
+const PROP_KEY_LOGIN_PASSWORD_HASH = 'APP_LOGIN_PASSWORD_HASH';
+const INITIAL_LOGIN_USERNAME = 'FirstStar';
+const INITIAL_LOGIN_PASSWORD_HASH = '4bbe438f18a5e2b59bdf0472eac2a86a957c4e874b002d81f94867692703c646';
+const AUTH_SESSION_TTL_SECONDS = 21600; // 6 hours (Apps Script CacheService maximum)
+const AUTH_LOGIN_FAILURE_KEY = 'APP_AUTH_LOGIN_FAILURES';
+const AUTH_LOGIN_FAILURE_LIMIT = 5;
+const AUTH_LOGIN_LOCK_SECONDS = 900;
 const CLASS_LIST = ['ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6', 'ม.1', 'ม.2', 'ม.3'];
 
 // โครงตารางของแต่ละชีต (ใช้ตอนสร้างชีตใหม่เท่านั้น)
@@ -26,10 +34,17 @@ function setup() {
   // ตั้งรหัสผ่าน Admin ถ้ายังไม่ได้ตั้ง (เปลี่ยน 'admin1234' เป็นรหัสที่ต้องการ)
   if (!props.getProperty(PROP_KEY_ADMIN_HASH)) {
     props.setProperty(PROP_KEY_ADMIN_HASH, hashPassword_('admin1234'));
-    Logger.log('✅ Setup complete. Admin password is: admin1234');
-  } else {
-    Logger.log('✅ Setup: คงค่า Sheet ID และรหัสผ่าน Admin เดิมไว้ (ไม่ทับ)');
+    Logger.log('✅ Setup complete. รหัสผ่าน Admin เดิมถูกตั้งค่าแล้ว');
   }
+
+  // Credentials for the application login; only a password hash is stored.
+  if (!props.getProperty(PROP_KEY_LOGIN_USERNAME)) {
+    props.setProperty(PROP_KEY_LOGIN_USERNAME, INITIAL_LOGIN_USERNAME);
+  }
+  if (!props.getProperty(PROP_KEY_LOGIN_PASSWORD_HASH)) {
+    props.setProperty(PROP_KEY_LOGIN_PASSWORD_HASH, INITIAL_LOGIN_PASSWORD_HASH);
+  }
+  Logger.log('✅ Setup: คงค่า Sheet ID และข้อมูลบัญชีเดิมไว้ (ไม่ทับ)');
 
   ensureSheets_();
 }
@@ -95,6 +110,52 @@ function verifyAdmin_(password) {
   return storedHash && storedHash === hashPassword_(password);
 }
 
+function createAuthSession_(username) {
+  const token = Utilities.getUuid() + Utilities.getUuid();
+  CacheService.getScriptCache().put('APP_AUTH_' + token, username, AUTH_SESSION_TTL_SECONDS);
+  return { token: token, username: username, expiresIn: AUTH_SESSION_TTL_SECONDS };
+}
+
+function getAuthUser_(token) {
+  if (!token || typeof token !== 'string' || token.length > 100) return '';
+  return CacheService.getScriptCache().get('APP_AUTH_' + token) || '';
+}
+
+function requireAuth_(token) {
+  const username = getAuthUser_(token);
+  if (!username) throw new Error('กรุณาเข้าสู่ระบบก่อนเพิ่มหรือแก้ไขข้อมูล');
+  return username;
+}
+
+function login_(data) {
+  const cache = CacheService.getScriptCache();
+  const attemptedUsername = String(data && data.username || '').slice(0, 80);
+  const failureKey = AUTH_LOGIN_FAILURE_KEY + '_' + hashPassword_(attemptedUsername).slice(0, 16);
+  const failedAttempts = parseInt(cache.get(failureKey) || '0', 10);
+  if (failedAttempts >= AUTH_LOGIN_FAILURE_LIMIT) {
+    throw new Error('พยายามเข้าสู่ระบบผิดหลายครั้ง กรุณารอ 15 นาทีแล้วลองใหม่');
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const username = props.getProperty(PROP_KEY_LOGIN_USERNAME);
+  const passwordHash = props.getProperty(PROP_KEY_LOGIN_PASSWORD_HASH);
+  if (!data || !username || !passwordHash || String(data.username || '') !== username ||
+      hashPassword_(String(data.password || '')) !== passwordHash) {
+    cache.put(failureKey, String(failedAttempts + 1), AUTH_LOGIN_LOCK_SECONDS);
+    throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+  }
+
+  cache.remove(failureKey);
+  return createAuthSession_(username);
+}
+
+function logout_(token) {
+  if (token && typeof token === 'string' && token.length <= 100) {
+    CacheService.getScriptCache().remove('APP_AUTH_' + token);
+  }
+  return { ok: true };
+}
+
 function todayThaiStr_() {
   return Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
 }
@@ -127,8 +188,11 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.action) {
     try {
       const action = e.parameter.action;
+      if (action !== 'getAllData' && action !== 'getAuthStatus') {
+        throw new Error('คำสั่งเปลี่ยนข้อมูลและเข้าสู่ระบบต้องส่งผ่าน POST');
+      }
       const data = e.parameter.data ? JSON.parse(e.parameter.data) : null;
-      const result = handleAction_(action, data);
+      const result = handleAction_(action, data, e.parameter.sessionToken);
       return ContentService.createTextOutput(JSON.stringify({ ok: true, data: result })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ ok: false, error: err.message })).setMimeType(ContentService.MimeType.JSON);
@@ -141,7 +205,7 @@ function doPost(e) {
   try {
     // ✅ อ่าน body ที่ส่งมาเป็น text/plain (หลีกเลี่ยง CORS preflight)
     const payload = JSON.parse(e.postData.contents);
-    const result = handleAction_(payload.action, payload.data);
+    const result = handleAction_(payload.action, payload.data, payload.sessionToken);
     return ContentService
       .createTextOutput(JSON.stringify({ ok: true, data: result }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -152,9 +216,15 @@ function doPost(e) {
   }
 }
 
-function handleAction_(action, data) {
+function handleAction_(action, data, sessionToken) {
+  if (action === 'login') return login_(data);
+  if (action === 'logout') return logout_(sessionToken);
+  if (action === 'getAuthStatus') return { authenticated: !!getAuthUser_(sessionToken) };
+  if (action === 'getAllData') return getAllDataByClass_();
+
+  // Every remaining action mutates data or system settings and requires a valid server session.
+  requireAuth_(sessionToken);
   switch (action) {
-    case 'getAllData':       return getAllDataByClass_();
     case 'addStudent':       return addStudentByClass_(data);
     case 'addBulkStudents':  return addBulkStudentsByClass_(data);
     case 'updateStudent':    return updateStudentByClass_(data);
@@ -167,7 +237,6 @@ function handleAction_(action, data) {
     case 'updateAttendance': return updateAttendanceByClass_(data);
     case 'deleteAttendance': return deleteByClassId_(data.id, 'ATT_'); 
     case 'updateSheetId':
-      if (!verifyAdmin_(data.password)) throw new Error('รหัสผ่าน Admin ไม่ถูกต้อง');
       PropertiesService.getScriptProperties().setProperty(PROP_KEY_SHEET_ID, data.sheetId);
       return { ok: true, message: 'บันทึก Sheet ID ใหม่แล้ว' };
     default: throw new Error('ไม่รู้จัก action: ' + action);

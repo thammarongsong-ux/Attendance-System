@@ -129,6 +129,9 @@
       <button onclick="showPage('add-subject')"  class="nav-button whitespace-nowrap bg-red-600 hover:bg-red-700       text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">📚 เพิ่มวิชา</button>
       <button onclick="showPage('manage-data')"  class="nav-button whitespace-nowrap bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">⚙️ จัดการข้อมูล</button>
       <button onclick="showPage('admin')"        class="nav-button whitespace-nowrap bg-gray-700 hover:bg-gray-800    text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">🔐 Admin</button>
+      <span id="auth-nav-status" class="self-center text-sm font-semibold text-gray-600 px-2">🔒 ยังไม่เข้าสู่ระบบ</span>
+      <button id="login-nav-button" onclick="openLogin()" class="nav-button whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">🔑 เข้าสู่ระบบ</button>
+      <button id="logout-nav-button" onclick="logout()" class="nav-button whitespace-nowrap bg-gray-600 hover:bg-gray-700 text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold hidden">🚪 ออกจากระบบ</button>
     </div>
   </div>
 </nav>
@@ -225,7 +228,7 @@
 </div>
 
 <!-- ADD STUDENT -->
-<div id="add-student-page" class="page hidden">
+<div id="add-student-page" class="page hidden" data-protected="true">
   <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 text-center">👨‍🎓 เพิ่มรายชื่อนักเรียน</h2>
   <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-6 max-w-4xl mx-auto">
     <div class="flex flex-wrap gap-3">
@@ -289,7 +292,7 @@
 </div>
 
 <!-- ADD SUBJECT -->
-<div id="add-subject-page" class="page hidden">
+<div id="add-subject-page" class="page hidden" data-protected="true">
   <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 text-center">📚 เพิ่มรายชื่อวิชา</h2>
   <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-6 max-w-4xl mx-auto">
     <div class="flex flex-wrap gap-3">
@@ -327,7 +330,7 @@
 </div>
 
 <!-- MANAGE -->
-<div id="manage-data-page" class="page hidden">
+<div id="manage-data-page" class="page hidden" data-protected="true">
   <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 text-center">⚙️ จัดการข้อมูล</h2>
   <div class="bg-purple-50 border border-purple-100 rounded-2xl p-4 mb-6 max-w-4xl mx-auto">
     <div class="flex flex-wrap gap-3">
@@ -390,7 +393,7 @@
 </div>
 
 <!-- ADMIN -->
-<div id="admin-page" class="page hidden">
+<div id="admin-page" class="page hidden" data-protected="true">
   <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 text-center">🔐 ตั้งค่าระบบ (Admin)</h2>
   <div class="card p-6 max-w-xl mx-auto">
     <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm">
@@ -402,11 +405,6 @@
       <input id="admin-sheet-id" type="text" class="field"
              placeholder="1ya65apZf-4ODvqMFdswWsd0haSVoSvow0Xew633zF1w">
       <p class="text-xs text-gray-500 mt-1">คัดลอกจาก URL Google Sheets ระหว่าง <code>/d/</code> และ <code>/edit</code></p>
-    </div>
-    <div class="mb-4">
-      <label class="block text-sm font-semibold mb-2">🔑 รหัสผ่าน Admin</label>
-      <input id="admin-password" type="password" class="field"
-             placeholder="รหัสผ่านที่ตั้งไว้ใน setup()">
     </div>
     <button onclick="updateSheetIdFromAdmin()"
             class="w-full bg-red-600 hover:bg-red-700 text-white btn">
@@ -437,22 +435,35 @@ const STATUS_LIST = ['มา','สาย','ลา','ขาด'];
 
 let allData = { students: [], subjects: [], attendance: [] };
 let isConnected = false;
+let authToken = '';
+let authUsername = '';
+let pendingPageId = '';
+const AUTH_TOKEN_STORAGE_KEY = 'attendance-admin-session';
+const PROTECTED_PAGES = new Set(['add-student', 'add-subject', 'manage-data', 'admin']);
 
 /* ==================================================
    API LAYER
    ================================================== */
-async function callApi(action, data = null) {
+async function callApi(action, data = null, tokenOverride = null) {
   try {
     const res = await fetch(WEB_APP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, data })
+      body: JSON.stringify({ action, data, sessionToken: tokenOverride || authToken })
     });
     const text = await res.text();
     let json;
     try { json = JSON.parse(text); }
     catch (e) { throw new Error('ตอบกลับไม่ใช่ JSON: ' + text.slice(0, 200)); }
-    if (!json.ok) throw new Error(json.error || 'Unknown error');
+    if (!json.ok) {
+      if (String(json.error || '').includes('กรุณาเข้าสู่ระบบ')) {
+        clearAuthSession();
+        updateAuthUI();
+        document.querySelectorAll('.page').forEach(page => page.classList.add('hidden'));
+        document.getElementById('dashboard-page')?.classList.remove('hidden');
+      }
+      throw new Error(json.error || 'Unknown error');
+    }
     return json.data;
   } catch (err) {
     if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
@@ -579,12 +590,109 @@ function showLoading(title = 'กำลังดำเนินการ...') {
    NAVIGATION
    ================================================== */
 function showPage(id) {
+  if (PROTECTED_PAGES.has(id) && !authToken) {
+    pendingPageId = id;
+    Swal.fire({
+      icon: 'info', title: 'ต้องเข้าสู่ระบบก่อน',
+      text: 'เข้าสู่ระบบเพื่อเพิ่มหรือแก้ไขข้อมูล',
+      confirmButtonText: 'เข้าสู่ระบบ', confirmButtonColor: '#059669'
+    }).then(result => { if (result.isConfirmed) openLogin(); });
+    id = 'dashboard';
+  }
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
   const el = document.getElementById(id + '-page');
   if (el) el.classList.remove('hidden');
   if (id === 'manage-data') showManageMode('students');
   if (id === 'admin') loadAdminInfo();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function clearAuthSession() {
+  authToken = '';
+  authUsername = '';
+  try { localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY); } catch (_) {}
+}
+
+function updateAuthUI() {
+  const status = document.getElementById('auth-nav-status');
+  const loginButton = document.getElementById('login-nav-button');
+  const logoutButton = document.getElementById('logout-nav-button');
+  if (status) status.textContent = authToken ? `🔓 เข้าสู่ระบบแล้ว: ${authUsername}` : '🔒 ยังไม่เข้าสู่ระบบ';
+  if (loginButton) loginButton.classList.toggle('hidden', !!authToken);
+  if (logoutButton) logoutButton.classList.toggle('hidden', !authToken);
+}
+
+function setAuthSession(session) {
+  if (!session || !session.token) throw new Error('ระบบไม่สามารถสร้าง session ได้');
+  authToken = session.token;
+  authUsername = session.username || '';
+  const saved = { token: authToken, username: authUsername, expiresAt: Date.now() + (session.expiresIn || 21600) * 1000 };
+  try { localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, JSON.stringify(saved)); } catch (_) {}
+  updateAuthUI();
+  if (pendingPageId) {
+    const nextPage = pendingPageId;
+    pendingPageId = '';
+    showPage(nextPage);
+  }
+}
+
+async function restoreAuthSession() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || 'null');
+    if (!saved || !saved.token || saved.expiresAt <= Date.now()) {
+      clearAuthSession();
+      return false;
+    }
+    authToken = saved.token;
+    authUsername = saved.username || '';
+    const status = await callApi('getAuthStatus');
+    if (!status.authenticated) {
+      clearAuthSession();
+      return false;
+    }
+    return true;
+  } catch (_) {
+    clearAuthSession();
+    return false;
+  } finally {
+    updateAuthUI();
+  }
+}
+
+function openLogin() {
+  if (authToken) {
+    Swal.fire({ icon: 'info', title: 'เข้าสู่ระบบอยู่แล้ว', text: `บัญชี ${authUsername}`, confirmButtonColor: '#059669' });
+    return;
+  }
+  Swal.fire({
+    title: '🔑 เข้าสู่ระบบ',
+    html: '<input id="swal-login-username" class="swal2-input" autocomplete="username" placeholder="ชื่อผู้ใช้"><input id="swal-login-password" class="swal2-input" type="password" autocomplete="current-password" placeholder="รหัสผ่าน">',
+    focusConfirm: false, showCancelButton: true,
+    confirmButtonText: 'เข้าสู่ระบบ', cancelButtonText: 'ยกเลิก', confirmButtonColor: '#059669',
+    preConfirm: async () => {
+      const username = document.getElementById('swal-login-username').value.trim();
+      const password = document.getElementById('swal-login-password').value;
+      if (!username || !password) { Swal.showValidationMessage('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'); return false; }
+      try { return await callApi('login', { username, password }); }
+      catch (err) { Swal.showValidationMessage(err.message); return false; }
+    }
+  }).then(result => {
+    if (!result.isConfirmed || !result.value) return;
+    try {
+      setAuthSession(result.value);
+      Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', timer: 1400, showConfirmButton: false });
+    } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
+  });
+}
+
+async function logout() {
+  const token = authToken;
+  clearAuthSession();
+  updateAuthUI();
+  document.querySelectorAll('.page').forEach(page => page.classList.add('hidden'));
+  document.getElementById('dashboard-page')?.classList.remove('hidden');
+  try { await callApi('logout', null, token); } catch (_) {}
+  Swal.fire({ icon: 'success', title: 'ออกจากระบบแล้ว', timer: 1200, showConfirmButton: false });
 }
 
 /* ==================================================
@@ -835,6 +943,11 @@ function clearAllStatus() {
 }
 
 async function saveAttendance() {
+  if (!authToken) {
+    pendingPageId = '';
+    Swal.fire({ icon: 'info', title: 'ต้องเข้าสู่ระบบก่อนบันทึก', confirmButtonText: 'เข้าสู่ระบบ', confirmButtonColor: '#059669' }).then(result => { if (result.isConfirmed) openLogin(); });
+    return;
+  }
   const date    = document.getElementById('attendance-date').value;
   const cls     = normalizeClass(document.getElementById('attendance-class').value);
   const subject = document.getElementById('attendance-subject').value;
@@ -1536,10 +1649,9 @@ function loadAdminInfo() {
 
 async function updateSheetIdFromAdmin() {
   const sheetId = document.getElementById('admin-sheet-id').value.trim();
-  const password = document.getElementById('admin-password').value;
 
-  if (!sheetId || !password) {
-    Swal.fire('แจ้งเตือน', 'กรุณากรอก Sheet ID และรหัสผ่าน', 'warning');
+  if (!authToken) {
+    Swal.fire('ต้องเข้าสู่ระบบ', 'กรุณาเข้าสู่ระบบก่อนจัดการการตั้งค่า', 'warning');
     return;
   }
 
@@ -1550,8 +1662,7 @@ async function updateSheetIdFromAdmin() {
 
   showLoading('กำลังบันทึก Sheet ID...');
   try {
-    await callApi('updateSheetId', { sheetId, password });
-    document.getElementById('admin-password').value = '';
+    await callApi('updateSheetId', { sheetId });
     Swal.fire('สำเร็จ', 'อัปเดต Sheet ID แล้ว', 'success');
     await loadAllDataFromSheet();
     loadAdminInfo();
@@ -1594,7 +1705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAllClassSelects();
   document.getElementById('attendance-date').value = todayThaiStr();
   document.getElementById('attendance-class').addEventListener('change', updateSubjectDropdown);
-
+  await restoreAuthSession();
   await loadAllDataFromSheet();
 
   if (!isConnected) {

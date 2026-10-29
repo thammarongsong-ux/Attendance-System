@@ -6,7 +6,7 @@ const PROP_KEY_ADMIN_HASH = 'ADMIN_PASSWORD_HASH';
 const PROP_KEY_LOGIN_USERNAME = 'APP_LOGIN_USERNAME';
 const PROP_KEY_LOGIN_PASSWORD_HASH = 'APP_LOGIN_PASSWORD_HASH';
 const INITIAL_LOGIN_USERNAME = 'FirstStar';
-const INITIAL_LOGIN_PASSWORD_HASH = '574001';
+const INITIAL_LOGIN_PASSWORD_HASH = '4bbe438f18a5e2b59bdf0472eac2a86a957c4e874b002d81f94867692703c646';
 const AUTH_SESSION_TTL_SECONDS = 21600; // 6 hours (Apps Script CacheService maximum)
 const AUTH_LOGIN_FAILURE_KEY = 'APP_AUTH_LOGIN_FAILURES';
 const AUTH_LOGIN_FAILURE_LIMIT = 5;
@@ -37,14 +37,10 @@ function setup() {
     Logger.log('✅ Setup complete. รหัสผ่าน Admin เดิมถูกตั้งค่าแล้ว');
   }
 
-  // Credentials for the application login; only a password hash is stored.
-  if (!props.getProperty(PROP_KEY_LOGIN_USERNAME)) {
-    props.setProperty(PROP_KEY_LOGIN_USERNAME, INITIAL_LOGIN_USERNAME);
-  }
-  if (!props.getProperty(PROP_KEY_LOGIN_PASSWORD_HASH)) {
-    props.setProperty(PROP_KEY_LOGIN_PASSWORD_HASH, INITIAL_LOGIN_PASSWORD_HASH);
-  }
-  Logger.log('✅ Setup: คงค่า Sheet ID และข้อมูลบัญชีเดิมไว้ (ไม่ทับ)');
+  // Pin the sole authorized account; store only the password hash.
+  props.setProperty(PROP_KEY_LOGIN_USERNAME, INITIAL_LOGIN_USERNAME);
+  props.setProperty(PROP_KEY_LOGIN_PASSWORD_HASH, INITIAL_LOGIN_PASSWORD_HASH);
+  Logger.log('✅ Setup: บัญชีล็อกอินถูกกำหนดเป็น FirstStar แล้ว');
 
   ensureSheets_();
 }
@@ -136,10 +132,9 @@ function login_(data) {
     throw new Error('พยายามเข้าสู่ระบบผิดหลายครั้ง กรุณารอ 15 นาทีแล้วลองใหม่');
   }
 
-  const props = PropertiesService.getScriptProperties();
-  const username = props.getProperty(PROP_KEY_LOGIN_USERNAME);
-  const passwordHash = props.getProperty(PROP_KEY_LOGIN_PASSWORD_HASH);
-  if (!data || !username || !passwordHash || String(data.username || '') !== username ||
+  const username = INITIAL_LOGIN_USERNAME;
+  const passwordHash = INITIAL_LOGIN_PASSWORD_HASH;
+  if (!data || String(data.username || '') !== username ||
       hashPassword_(String(data.password || '')) !== passwordHash) {
     cache.put(failureKey, String(failedAttempts + 1), AUTH_LOGIN_LOCK_SECONDS);
     throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
@@ -221,8 +216,10 @@ function handleAction_(action, data, sessionToken) {
   if (action === 'logout') return logout_(sessionToken);
   if (action === 'getAuthStatus') return { authenticated: !!getAuthUser_(sessionToken) };
   if (action === 'getAllData') return getAllDataByClass_();
+  // Anyone with the link may record attendance; editing/deleting records remains admin-only.
+  if (action === 'saveAttendance') return saveAttendanceByClass_(data);
 
-  // Every remaining action mutates data or system settings and requires a valid server session.
+  // Student/subject management, attendance corrections and system settings require a valid session.
   requireAuth_(sessionToken);
   switch (action) {
     case 'addStudent':       return addStudentByClass_(data);
@@ -233,7 +230,6 @@ function handleAction_(action, data, sessionToken) {
     case 'addBulkSubjects':  return addBulkSubjectsByClass_(data);
     case 'updateSubject':    return updateSubjectByClass_(data);
     case 'deleteSubject':    return deleteByClassId_(data.id, 'SUB_');
-    case 'saveAttendance':   return saveAttendanceByClass_(data);
     case 'updateAttendance': return updateAttendanceByClass_(data);
     case 'deleteAttendance': return deleteByClassId_(data.id, 'ATT_'); 
     case 'updateSheetId':

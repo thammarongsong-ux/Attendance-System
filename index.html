@@ -435,6 +435,10 @@ const STATUS_LIST = ['มา','สาย','ลา','ขาด'];
 
 let allData = { students: [], subjects: [], attendance: [] };
 let isConnected = false;
+let isSavingAttendance = false;
+let attendanceFormDirty = false;
+let dataLoadSequence = 0;
+let lastReturnRefreshAt = 0;
 let authToken = '';
 let authUsername = '';
 let pendingPageId = '';
@@ -445,12 +449,16 @@ const PROTECTED_PAGES = new Set(['add-student', 'add-subject', 'manage-data', 'a
    API LAYER
    ================================================== */
 async function callApi(action, data = null, tokenOverride = null) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
   try {
     const res = await fetch(WEB_APP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, data, sessionToken: tokenOverride || authToken })
+      body: JSON.stringify({ action, data, sessionToken: tokenOverride || authToken }),
+      signal: controller.signal
     });
+    if (!res.ok) throw new Error(`Web App ตอบกลับ HTTP ${res.status}`);
     const text = await res.text();
     let json;
     try { json = JSON.parse(text); }
@@ -466,17 +474,22 @@ async function callApi(action, data = null, tokenOverride = null) {
     }
     return json.data;
   } catch (err) {
+    if (err.name === 'AbortError') throw new Error('หมดเวลารอคำตอบจาก Web App กรุณาตรวจสอบเครือข่ายแล้วลองใหม่');
     if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
       throw new Error('เชื่อมต่อ Web App ไม่ได้ — ตรวจสอบว่า Deploy แล้ว และเปิด "Anyone"');
     }
     throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
 async function loadAllDataFromSheet(showAlert = false) {
+  const loadSequence = ++dataLoadSequence;
   setConnectionStatus('loading', '⏳ กำลังโหลดข้อมูล...');
   try {
     const data = await callApi('getAllData');
+    if (loadSequence !== dataLoadSequence) return false;
     allData = {
       students:   data.students   || [],
       subjects:   data.subjects   || [],
@@ -494,6 +507,7 @@ async function loadAllDataFromSheet(showAlert = false) {
     }
     return true;
   } catch (err) {
+    if (loadSequence !== dataLoadSequence) return false;
     isConnected = false;
     setConnectionStatus('err', '❌ ' + err.message);
     if (showAlert) Swal.fire('ผิดพลาด', err.message, 'error');
@@ -507,7 +521,7 @@ async function loadAllDataFromSheet(showAlert = false) {
 // จัดคอลัมน์กลับให้ตรงก่อนนำไปใช้ (ถ้า deploy Cod.gs รุ่นใหม่แล้ว ฟังก์ชันนี้จะข้ามเอง)
 function normalizeAttendanceRow(r) {
   if (!r) return r;
-  const isShifted = !r.attendance_status && STATUS_LIST.includes(r.attendance_subject);
+  const isShifted = STATUS_LIST.includes(r.attendance_subject) && !STATUS_LIST.includes(r.attendance_status);
   if (!isShifted) return r;
   return Object.assign({}, r, {
     attendance_subject: r.attendance_student_class || r.attendance_subject,
@@ -721,6 +735,7 @@ function updateSubjectDropdown() {
   const cls = normalizeClass(document.getElementById('attendance-class')?.value);
   const sel = document.getElementById('attendance-subject');
   if (!sel) return;
+  const currentSubject = sel.value;
   sel.innerHTML = '<option value="">เลือกวิชา</option>';
   if (!cls) return;
   
@@ -736,6 +751,7 @@ function updateSubjectDropdown() {
     o.value = o.textContent = s.subject_name;
     sel.appendChild(o);
   });
+  if ([...sel.options].some(option => option.value === currentSubject)) sel.value = currentSubject;
 }
 
 // รายวิชาสำหรับหน้าสถิติ (กรองตามชั้นเรียนที่เลือก)
@@ -882,29 +898,31 @@ function loadStudentsForAttendance() {
     const icons = { มา:'✅', สาย:'⏰', ลา:'📝', ขาด:'❌' };
 
     html += `
-      <div class="student-card bg-white ${curStatus ? `border-${statusColors[curStatus]}-300` : 'border-gray-200'} p-4 rounded-2xl border-2">
-        <div class="flex flex-col md:flex-row md:items-center gap-3">
-          <div class="flex-1 min-w-0">
-            <h4 class="font-semibold text-lg">${esc(st.student_id)}. ${esc(st.student_name)}</h4>
-            <div class="text-xs text-gray-600 mt-1">
-              ประวัติ: มา ${h.มา} | สาย ${h.สาย} | ลา ${h.ลา} | ขาด ${h.ขาด}
-              ${total ? ` | <span class="font-semibold ${+rate >= 90 ? 'text-green-600' : +rate >= 75 ? 'text-yellow-600' : 'text-red-600'}">${rate}%</span>` : ''}
-            </div>
+      <div class="student-card bg-white ${curStatus ? `border-${statusColors[curStatus]}-300` : 'border-gray-200'} p-3 sm:p-4 rounded-2xl border-2">
+        <div class="flex flex-col gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg text-sm font-semibold text-gray-800 whitespace-nowrap">${esc(st.student_id)}</span>
+            <span class="inline-flex items-center gap-2 flex-1 min-w-0 font-medium text-base truncate">${esc(st.student_name)}</span>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold whitespace-nowrap ${curStatus ? `bg-${statusColors[curStatus]}-100 text-${statusColors[curStatus]}-800` : 'bg-gray-100 text-gray-400'} ">
+              ${curStatus ? `${icons[curStatus]} ${curStatus}` : '<span class="opacity-60">ไม่ได้เลือก</span>'}
+            </span>
           </div>
-          <div class="flex flex-wrap gap-2">
+          <div class="hidden sm:flex sm:items-center sm:gap-3 text-xs text-gray-500">
+            <span class="whitespace-nowrap">ประวัติ: มา ${h.มา} | สาย ${h.สาย} | ลา ${h.ลา} | ขาด ${h.ขาด}</span>
+            ${total ? `<span class="font-semibold ${+rate >= 90 ? 'text-green-600' : +rate >= 75 ? 'text-yellow-600' : 'text-red-600'}">${rate}%</span>` : ''}
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
             ${STATUS_LIST.map(v => `
-              <label class="cursor-pointer">
-                <input type="radio" name="status-${esc(st.student_id)}" value="${v}"
-                  class="status-radio hidden" ${curStatus === v ? 'checked' : ''}
-                  onchange="updateRadioStyle(this)">
-                <span class="status-label inline-block px-3.5 py-1.5 rounded-full border-2 border-${statusColors[v]}-500 ${curStatus === v ? `bg-${statusColors[v]}-500 text-white` : `text-${statusColors[v]}-700 hover:bg-${statusColors[v]}-50`}">
-                  ${icons[v]} ${v}
-                </span>
+              <label class="cursor-pointer inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-sm font-semibold
+                border-2 border-transparent ${curStatus === v ? `bg-${statusColors[v]}-500 text-white` : `border-${statusColors[v]}-400 text-${statusColors[v]}-700 hover:bg-${statusColors[v]}-50`}
+                onchange="updateSelectedStatus(this, '${esc(st.student_id)}')">
+                <input type="radio" name="status-${esc(st.student_id)}" value="${v}" class="status-radio hidden" ${curStatus === v ? 'checked' : ''}">
+                ${icons[v]} ${v}
               </label>`).join('')}
           </div>
-          <div class="md:w-48">
-            <input type="text" placeholder="หมายเหตุ" value="${esc(curNotes)}"
-              class="notes-input field"
+          <div class="relative">
+            <input type="text" placeholder="หมายเหตุ (ถ้ามี)" value="${esc(curNotes)}"
+              class="notes-input w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-400 focus:border-red-400"
               data-student-id="${esc(st.student_id)}" maxlength="200">
           </div>
         </div>
@@ -913,36 +931,79 @@ function loadStudentsForAttendance() {
 
   html += `</div>
     <div class="mt-6 text-center">
-      <button onclick="saveAttendance()" class="btn w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white text-base sm:text-lg">💾 บันทึกการเช็คชื่อ</button>
+      <button id="checkin-save-button" onclick="saveAttendance()" class="btn w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white text-base sm:text-lg">💾 บันทึกการเช็คชื่อ</button>
     </div>`;
 
   list.innerHTML = html;
+  restorePendingInteractionState();
+  attendanceFormDirty = false;
 }
 
-function updateRadioStyle(radio) {
-  const name = radio.name;
-  const colors = { มา:'green', สาย:'yellow', ลา:'blue', ขาด:'red' };
-  document.querySelectorAll(`input[name="${name}"]`).forEach(r => {
-    const lbl = r.nextElementSibling;
-    const v = r.value;
-    const c = colors[v];
-    lbl.className = `status-label inline-block px-3.5 py-1.5 rounded-full border-2 border-${c}-500 ${r.checked ? `bg-${c}-500 text-white` : `text-${c}-700 hover:bg-${c}-50`}`;
+function restorePendingInteractionState() {
+  const pendingSelections = new Map();
+  document.querySelectorAll('.student-list .status-radio:checked, .student-list .notes-input').forEach(input => {
+    const sid = String(input.dataset?.studentId || input.getAttribute('name')?.replace(/^status-/, ''));
+    if (!sid) return;
+    pendingSelections.set(sid, { kind: input.type, value: input.value, checked: input.checked });
   });
+  pendingSelections.forEach((saved, sid) => {
+    if (saved.kind === 'radio') {
+      const radio = document.querySelector(`input[name="status-${CSS.escape(sid)}"]`);
+      if (radio) {
+        radio.checked = saved.checked;
+        radio.value = saved.value;
+        updateSelectedStatus(radio.nextElementSibling, sid);
+      }
+    } else if (saved.kind === 'text') {
+      const input = document.querySelector(`input.notes-input[data-student-id="${CSS.escape(sid)}"]`);
+      if (input) input.value = saved.value;
+    }
+  });
+}
+
+function updateSelectedStatus(label, studentId) {
+  const radio = document.querySelector(`input[name="status-${CSS.escape(studentId)}"]:checked`);
+  if (!label || !radio) return;
+  const colors = { มา:'green', สาย:'yellow', ลา:'blue', ขาด:'red' };
+  const c = colors[radio.value];
+  label.className = `cursor-pointer inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-sm font-semibold
+    border-2 border-transparent ${radio.checked ? `bg-${c}-500 text-white` : `border-${c}-400 text-${c}-700 hover:bg-${c}-50`}`;
+  document.querySelectorAll(`input[name="status-${CSS.escape(studentId)}"]`).forEach(r => {
+    if (r !== radio) {
+      const lbl = r.nextElementSibling;
+      if (lbl && lbl.classList.contains('cursor-pointer') && lbl.classList.contains('rounded-full')) {
+        const vc = colors[r.value];
+        lbl.className = `cursor-pointer inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-sm font-semibold
+          border-2 border-transparent ${r.checked ? `bg-${vc}-500 text-white` : `border-${vc}-400 text-${vc}-700 hover:bg-${vc}-50`}`;
+      }
+    }
+  });
+  const counter = document.getElementById('checkin-feedback-counter');
+  if (counter) {
+    const checkedCount = document.querySelectorAll('.student-list .status-radio:checked').length;
+    counter.textContent = `เลือก ${checkedCount} คน`;
+  }
 }
 
 function selectAllStatus(status) {
   document.querySelectorAll('.status-radio').forEach(r => {
-    if (r.value === status) { r.checked = true; updateRadioStyle(r); }
+    if (r.value === status) { r.checked = true; }
+    updateSelectedStatus(r.nextElementSibling, r.name.replace(/^status-/, ''));
   });
 }
 
 function clearAllStatus() {
-  document.querySelectorAll('.status-radio').forEach(r => {
-    r.checked = false; updateRadioStyle(r);
+  document.querySelectorAll('.status-radio:checked').forEach(r => { r.checked = false; });
+  document.querySelectorAll('.student-list .status-radio').forEach(r => {
+    const lbl = r.nextElementSibling;
+    if (lbl && lbl.classList.contains('cursor-pointer') && lbl.classList.contains('rounded-full')) {
+      updateSelectedStatus(lbl, r.name.replace(/^status-/, ''));
+    }
   });
 }
 
 async function saveAttendance() {
+  if (isSavingAttendance) return;
   const date    = document.getElementById('attendance-date').value;
   const cls     = normalizeClass(document.getElementById('attendance-class').value);
   const subject = document.getElementById('attendance-subject').value;
@@ -967,14 +1028,31 @@ async function saveAttendance() {
 
   if (!records.length) { Swal.fire('แจ้งเตือน', 'ยังไม่ได้เลือกสถานะนักเรียน', 'warning'); return; }
 
+  isSavingAttendance = true;
+  const saveButton = document.getElementById('checkin-save-button');
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = '⏳ กำลังบันทึก...';
+  }
   showLoading('กำลังบันทึกไปยัง Google Sheets...');
   try {
     const res = await callApi('saveAttendance', records);
-    await loadAllDataFromSheet();
-    Swal.fire('สำเร็จ', `เพิ่มใหม่ ${res.inserted} รายการ, อัปเดต ${res.updated} รายการ`, 'success');
-    loadStudentsForAttendance();
+    attendanceFormDirty = false;
+    const refreshed = await loadAllDataFromSheet();
+    if (refreshed) {
+      await Swal.fire('สำเร็จ', `เพิ่มใหม่ ${res.inserted} รายการ, อัปเดต ${res.updated} รายการ, ข้ามรายการเดิม ${res.skipped || 0} รายการ`, 'success');
+      loadStudentsForAttendance();
+    } else {
+      await Swal.fire('บันทึกแล้ว', 'บันทึกข้อมูลสำเร็จ แต่โหลดข้อมูลล่าสุดกลับมาไม่สำเร็จ กรุณากดรีเฟรชก่อนบันทึกซ้ำ', 'warning');
+    }
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
+  } finally {
+    isSavingAttendance = false;
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.textContent = '💾 บันทึกการเช็คชื่อ';
+    }
   }
 }
 
@@ -1700,8 +1778,47 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAllClassSelects();
   document.getElementById('attendance-date').value = todayThaiStr();
   document.getElementById('attendance-class').addEventListener('change', updateSubjectDropdown);
+  const studentList = document.getElementById('student-list');
+  if (studentList) {
+    studentList.addEventListener('change', () => { attendanceFormDirty = true; });
+    studentList.addEventListener('input', () => { attendanceFormDirty = true; });
+  }
   await restoreAuthSession();
   await loadAllDataFromSheet();
+
+  // Refresh once when users return to the tab or app after switching devices/apps.
+  const refreshOnReturn = () => {
+    const now = Date.now();
+    if (isSavingAttendance) return;
+    if (now - lastReturnRefreshAt < 5000) return;
+    lastReturnRefreshAt = now;
+    loadAllDataFromSheet().then(refreshed => {
+      if (!refreshed) return;
+      const activePage = document.querySelector('.page:not(.hidden)')?.id;
+      if (activePage === 'checkin-page') {
+        // Keep unsaved status/notes selections intact until the teacher saves.
+        if (attendanceFormDirty) return;
+        const date = document.getElementById('attendance-date')?.value;
+        const cls = document.getElementById('attendance-class')?.value;
+        const subject = document.getElementById('attendance-subject')?.value;
+        if (date && cls && subject) loadStudentsForAttendance();
+      } else if (activePage === 'statistics-page') {
+        loadStatistics();
+      } else if (activePage === 'manage-data-page') {
+        const mode = [...document.querySelectorAll('.manage-mode')].find(el => !el.classList.contains('hidden'))?.id;
+        if (mode === 'manage-students-mode') loadStudentsData();
+        else if (mode === 'manage-subjects-mode') loadSubjectsData();
+        else if (mode === 'manage-attendance-mode') loadAttendanceData();
+      } else if (activePage === 'admin-page') {
+        loadAdminInfo();
+      }
+    });
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshOnReturn();
+  });
+  window.addEventListener('focus', refreshOnReturn);
+  window.addEventListener('online', refreshOnReturn);
 
   if (!isConnected) {
     setTimeout(() => {

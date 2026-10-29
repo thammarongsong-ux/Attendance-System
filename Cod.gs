@@ -12,6 +12,7 @@ const AUTH_LOGIN_FAILURE_KEY = 'APP_AUTH_LOGIN_FAILURES';
 const AUTH_LOGIN_FAILURE_LIMIT = 5;
 const AUTH_LOGIN_LOCK_SECONDS = 900;
 const CLASS_LIST = ['ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6', 'ม.1', 'ม.2', 'ม.3'];
+const ATTENDANCE_STATUS_LIST = ['มา', 'สาย', 'ลา', 'ขาด'];
 
 // โครงตารางของแต่ละชีต (ใช้ตอนสร้างชีตใหม่เท่านั้น)
 const SHEET_DEFS = {
@@ -123,6 +124,16 @@ function requireAuth_(token) {
   return username;
 }
 
+function withScriptLock_(callback) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    return callback();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function login_(data) {
   const cache = CacheService.getScriptCache();
   const attemptedUsername = String(data && data.username || '').trim().slice(0, 80);
@@ -218,27 +229,32 @@ function handleAction_(action, data, sessionToken) {
   if (action === 'logout') return logout_(sessionToken);
   if (action === 'getAuthStatus') return { authenticated: !!getAuthUser_(sessionToken) };
   if (action === 'getAllData') return getAllDataByClass_();
-  // Anyone with the link may record attendance; editing/deleting records remains admin-only.
-  if (action === 'saveAttendance') return saveAttendanceByClass_(data);
+  // Anyone with the link may add attendance; changing an existing record requires login.
+  if (action === 'saveAttendance') return saveAttendanceByClass_(data, !!getAuthUser_(sessionToken));
 
   // Student/subject management, attendance corrections and system settings require a valid session.
   requireAuth_(sessionToken);
-  switch (action) {
-    case 'addStudent':       return addStudentByClass_(data);
-    case 'addBulkStudents':  return addBulkStudentsByClass_(data);
-    case 'updateStudent':    return updateStudentByClass_(data);
-    case 'deleteStudent':    return deleteByClassId_(data.id, 'STU_');
-    case 'addSubject':       return addSubjectByClass_(data);
-    case 'addBulkSubjects':  return addBulkSubjectsByClass_(data);
-    case 'updateSubject':    return updateSubjectByClass_(data);
-    case 'deleteSubject':    return deleteByClassId_(data.id, 'SUB_');
-    case 'updateAttendance': return updateAttendanceByClass_(data);
-    case 'deleteAttendance': return deleteByClassId_(data.id, 'ATT_'); 
-    case 'updateSheetId':
-      PropertiesService.getScriptProperties().setProperty(PROP_KEY_SHEET_ID, data.sheetId);
-      return { ok: true, message: 'บันทึก Sheet ID ใหม่แล้ว' };
-    default: throw new Error('ไม่รู้จัก action: ' + action);
-  }
+  return withScriptLock_(function () {
+    switch (action) {
+      case 'addStudent':       return addStudentByClass_(data);
+      case 'addBulkStudents':  return addBulkStudentsByClass_(data);
+      case 'updateStudent':    return updateStudentByClass_(data);
+      case 'deleteStudent':    return deleteByClassId_(data.id, 'STU_');
+      case 'addSubject':       return addSubjectByClass_(data);
+      case 'addBulkSubjects':  return addBulkSubjectsByClass_(data);
+      case 'updateSubject':    return updateSubjectByClass_(data);
+      case 'deleteSubject':    return deleteByClassId_(data.id, 'SUB_');
+      case 'updateAttendance': return updateAttendanceByClass_(data);
+      case 'deleteAttendance': return deleteByClassId_(data.id, 'ATT_');
+      case 'updateSheetId':
+        if (!data || !/^[A-Za-z0-9_-]{20,120}$/.test(String(data.sheetId || ''))) {
+          throw new Error('รูปแบบ Google Sheet ID ไม่ถูกต้อง');
+        }
+        PropertiesService.getScriptProperties().setProperty(PROP_KEY_SHEET_ID, data.sheetId);
+        return { ok: true, message: 'บันทึก Sheet ID ใหม่แล้ว' };
+      default: throw new Error('ไม่รู้จัก action: ' + action);
+    }
+  });
 }
 
 // ==================================================
@@ -676,36 +692,130 @@ function deleteByClassId_(id, prefix) {
   return { ok: true };
 }
 
-function saveAttendanceByClass_(records) {
-  if (!Array.isArray(records)) throw new Error('รูปแบบข้อมูลการเช็คชื่อไม่ถูกต้อง');
-  const existing = getAllDataByClass_().attendance;
-  let inserted = 0, updated = 0;
-  records.forEach(function (record) {
-    const cls = normalizeClass_(record.cls || '');
-    if (CLASS_LIST.indexOf(cls) === -1) throw new Error('ต้องระบุชั้นเรียนให้ถูกต้องก่อนบันทึก');
-    const match = existing.find(function (r) {
-      return r.attendance_date === normalizeDate_(record.date) &&
-        String(r.attendance_student_id) === String(record.student_id) &&
-        String(r.attendance_subject) === String(record.subject) &&
-        normalizeClass_(r.attendance_student_class) === cls;
-    });
-    if (match) {
-      const loc = decodeRowId_(match._id, 'ATT_', 'Attendance');
-      loc.sheet.getRange(loc.row, 4, 1, 2).setValues([[record.status, record.notes || '']]);
-      if (!match.attendance_student_class && loc.sheet.getLastColumn() < 7) {
-        loc.sheet.getRange(1, 7).setValue('attendance_student_class');
+function isValidAttendanceDate_(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parts = value.split('-').map(Number);
+  const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  return date.getUTCFullYear() === parts[0] && date.getUTCMonth() === parts[1] - 1 && date.getUTCDate() === parts[2];
+}
+
+function attendanceKey_(cls, date, studentId, subject) {
+  return JSON.stringify([normalizeClass_(cls), date, String(studentId), String(subject)]);
+}
+
+function saveAttendanceByClass_(records, allowUpdates) {
+  if (!Array.isArray(records) || records.length === 0 || records.length > 500) {
+    throw new Error('รายการเช็คชื่อต้องมี 1–500 รายการ');
+  }
+
+  return withScriptLock_(function () {
+    const data = getAllDataByClass_();
+    const students = new Set(data.students.map(function (student) {
+      return attendanceKey_(student.student_class, '', student.student_id, '');
+    }));
+    const subjects = new Set(data.subjects.map(function (subject) {
+      return attendanceKey_(subject.subject_class, '', '', subject.subject_name);
+    }));
+    const seen = new Set();
+    const validated = records.map(function (record) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('รูปแบบรายการเช็คชื่อไม่ถูกต้อง');
+      let cls = normalizeClass_(record.cls || '');
+      const studentId = String(record.student_id == null ? '' : record.student_id).trim();
+      const subject = String(record.subject == null ? '' : record.subject).trim();
+      const date = record.date;
+      const status = record.status;
+      const notes = record.notes == null ? '' : record.notes;
+
+      if (!studentId || studentId.length > 40) throw new Error('เลขที่นักเรียนไม่ถูกต้อง');
+      if (!subject || subject.length > 120) throw new Error('รายวิชาไม่ถูกต้อง');
+      if (!cls) {
+        const possibleClasses = data.students.filter(function (student) {
+          return String(student.student_id) === studentId && subjects.has(attendanceKey_(student.student_class, '', '', subject));
+        }).map(function (student) { return normalizeClass_(student.student_class); });
+        const uniqueClasses = Array.from(new Set(possibleClasses));
+        if (uniqueClasses.length !== 1) throw new Error('ไม่สามารถระบุชั้นเรียนจากข้อมูลนักเรียนและวิชาได้');
+        cls = uniqueClasses[0];
       }
-      if (!match.attendance_student_class) loc.sheet.getRange(loc.row, 7).setValue(cls);
-      updated++;
-    } else {
-      ensureClassSheet__('Attendance', cls).appendRow([
-        record.date, String(record.student_id), record.subject, record.status,
-        record.notes || '', new Date(), cls
-      ]);
-      inserted++;
-    }
+      if (CLASS_LIST.indexOf(cls) === -1) throw new Error('ชั้นเรียนไม่ถูกต้อง');
+      if (!isValidAttendanceDate_(date)) throw new Error('รูปแบบวันที่ไม่ถูกต้อง');
+      if (ATTENDANCE_STATUS_LIST.indexOf(status) === -1) throw new Error('สถานะการเข้าเรียนไม่ถูกต้อง');
+      if (typeof notes !== 'string' || notes.length > 200 || /^\s*[=+\-@]/.test(notes)) {
+        throw new Error('หมายเหตุไม่ถูกต้องหรือยาวเกิน 200 ตัวอักษร');
+      }
+      if (!students.has(attendanceKey_(cls, '', studentId, ''))) throw new Error('ไม่พบนักเรียนในชั้นที่ระบุ');
+      if (!subjects.has(attendanceKey_(cls, '', '', subject))) throw new Error('รายวิชาไม่ตรงกับชั้นเรียนที่ระบุ');
+
+      const key = attendanceKey_(cls, date, studentId, subject);
+      if (seen.has(key)) throw new Error('มีรายการนักเรียนซ้ำในคำขอเดียวกัน');
+      seen.add(key);
+      return { cls: cls, studentId: studentId, subject: subject, date: date, status: status, notes: notes, key: key };
+    });
+
+    const existingByKey = new Map();
+    const unresolvedLegacyKeys = new Set();
+    data.attendance.forEach(function (row) {
+      const cls = normalizeClass_(row.attendance_student_class);
+      if (!cls) {
+        unresolvedLegacyKeys.add(JSON.stringify([
+          normalizeDate_(row.attendance_date), String(row.attendance_student_id), String(row.attendance_subject)
+        ]));
+        return;
+      }
+      const key = attendanceKey_(cls, row.attendance_date, row.attendance_student_id, row.attendance_subject);
+      existingByKey.set(key, row);
+    });
+
+    const insertsByClass = {};
+    const updates = [];
+    let inserted = 0, updated = 0, skipped = 0;
+    validated.forEach(function (record) {
+      const match = existingByKey.get(record.key);
+      if (match) {
+        if (!allowUpdates) {
+          if (match.attendance_status !== record.status || String(match.attendance_notes || '') !== record.notes) {
+            throw new Error('รายการนี้ถูกบันทึกแล้ว หากต้องการแก้ไขสถานะ กรุณาเข้าสู่ระบบ');
+          }
+          skipped++;
+          return;
+        }
+        updates.push({ match: match, record: record });
+        updated++;
+      } else {
+        const legacyKey = JSON.stringify([record.date, record.studentId, record.subject]);
+        if (unresolvedLegacyKeys.has(legacyKey)) {
+          throw new Error('พบรายการเดิมที่ยังระบุชั้นเรียนไม่ได้ กรุณาให้ผู้ดูแลตรวจสอบก่อนบันทึกซ้ำ');
+        }
+        if (!insertsByClass[record.cls]) insertsByClass[record.cls] = [];
+        insertsByClass[record.cls].push([
+          record.date, record.studentId, record.subject, record.status,
+          record.notes, new Date(), record.cls
+        ]);
+        inserted++;
+      }
+    });
+
+    // Do not mutate any sheet until every incoming row has passed validation.
+    // Resolve every target row first, so a stale/missing _id cannot leave a
+    // partially applied batch behind.
+    const preparedUpdates = updates.map(function (item) {
+      return { loc: decodeRowId_(item.match._id, 'ATT_', 'Attendance'), item: item };
+    });
+    preparedUpdates.forEach(function (prepared) {
+      const loc = prepared.loc;
+      const item = prepared.item;
+      loc.sheet.getRange(loc.row, 4, 1, 2).setValues([[item.record.status, item.record.notes]]);
+      if (!item.match.attendance_student_class) {
+        if (loc.sheet.getLastColumn() < 7) loc.sheet.getRange(1, 7).setValue('attendance_student_class');
+        loc.sheet.getRange(loc.row, 7).setValue(item.record.cls);
+      }
+    });
+    Object.keys(insertsByClass).forEach(function (cls) {
+      const sh = ensureClassSheet__('Attendance', cls);
+      const rows = insertsByClass[cls];
+      sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    });
+    return { ok: true, inserted: inserted, updated: updated, skipped: skipped };
   });
-  return { ok: true, inserted: inserted, updated: updated };
 }
 
 function updateAttendanceByClass_(data) {

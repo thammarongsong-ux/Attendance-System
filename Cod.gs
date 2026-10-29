@@ -88,8 +88,100 @@ function getSheetId_() {
   return PropertiesService.getScriptProperties().getProperty(PROP_KEY_SHEET_ID);
 }
 
+// เปิด Spreadsheet ครั้งเดียวต่อ 1 คำขอ (เดิมเปิดซ้ำหลายสิบครั้ง = ช้ามาก)
+let SS_MEMO_ = null;
 function getSpreadsheet_() {
-  return SpreadsheetApp.openById(getSheetId_());
+  if (!SS_MEMO_) SS_MEMO_ = SpreadsheetApp.openById(getSheetId_());
+  return SS_MEMO_;
+}
+
+// ---------- แคชข้อมูลทั้งหมด (แบ่งเป็นก้อน ก้อนละ ≤ 30,000 ตัวอักษร) ----------
+const DATA_CACHE_KEY = 'APP_DATA_CACHE_V1';
+const DATA_CACHE_TTL = 600;   // วินาที (มี trigger รีเฟรชทุก 5 นาที ถ้าติดตั้งด้วย installCacheRefreshTrigger)
+const DATA_CACHE_CHUNK = 30000;
+
+function cacheGetData_() {
+  try {
+    const c = CacheService.getScriptCache();
+    const n = parseInt(c.get(DATA_CACHE_KEY + '_n') || '0', 10);
+    if (!n) return null;
+    const keys = [];
+    for (let i = 0; i < n; i++) keys.push(DATA_CACHE_KEY + '_' + i);
+    const parts = c.getAll(keys);
+    let s = '';
+    for (let i = 0; i < n; i++) {
+      const p = parts[DATA_CACHE_KEY + '_' + i];
+      if (p == null) return null;
+      s += p;
+    }
+    return JSON.parse(s);
+  } catch (err) { return null; }
+}
+
+function cachePutData_(obj) {
+  try {
+    const s = JSON.stringify(obj);
+    const puts = {};
+    let n = 0;
+    for (let i = 0; i < s.length; i += DATA_CACHE_CHUNK) {
+      puts[DATA_CACHE_KEY + '_' + n] = s.slice(i, i + DATA_CACHE_CHUNK);
+      n++;
+    }
+    if (n === 0 || n > 60) return;
+    puts[DATA_CACHE_KEY + '_n'] = String(n);
+    CacheService.getScriptCache().putAll(puts, DATA_CACHE_TTL);
+  } catch (err) { /* แคชล้มเหลวได้ ไม่กระทบการทำงาน */ }
+}
+
+function cacheClearData_() {
+  try {
+    const c = CacheService.getScriptCache();
+    const n = parseInt(c.get(DATA_CACHE_KEY + '_n') || '0', 10);
+    const keys = [DATA_CACHE_KEY + '_n'];
+    for (let i = 0; i < Math.max(n, 60); i++) keys.push(DATA_CACHE_KEY + '_' + i);
+    c.removeAll(keys);
+  } catch (err) {}
+}
+
+function getAllDataCached_(force) {
+  const t0 = Date.now();
+  if (!force) {
+    const cached = cacheGetData_();
+    if (cached) {
+      cached._meta = { cached: true, serverMs: Date.now() - t0 };
+      return cached;
+    }
+  }
+  const data = getAllDataByClass_();
+  cachePutData_(data);
+  data._meta = { cached: false, serverMs: Date.now() - t0, sheetsRead: SHEETS_READ_COUNT_ };
+  return data;
+}
+
+// รันด้วย time-driven trigger ทุก 5 นาที: อุ่นสคริปต์ + เติมแคชไว้ล่วงหน้า
+// ผู้ใช้จึงแทบไม่ต้องรออ่านชีตจริง (เดิมต้องรอทุกครั้งที่แคชหมดอายุ)
+function refreshDataCache() {
+  const data = getAllDataByClass_();
+  cachePutData_(data);
+}
+
+// ⚠️ รันฟังก์ชันนี้ "ครั้งเดียว" ใน Apps Script เพื่อติดตั้ง trigger (รันซ้ำได้ ไม่สร้างซ้ำ)
+function installCacheRefreshTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'refreshDataCache') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('refreshDataCache').timeBased().everyMinutes(5).create();
+  Logger.log('✅ ติดตั้ง trigger refreshDataCache ทุก 5 นาทีแล้ว');
+}
+
+// อ่านเฉพาะแถวข้อมูลที่มีจริง (ข้ามชีตว่าง และอ่านเฉพาะคอลัมน์ที่ใช้)
+let SHEETS_READ_COUNT_ = 0;
+function readRows_(sh, cols) {
+  SHEETS_READ_COUNT_++;
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return [];
+  const width = Math.min(cols, sh.getMaxColumns());
+  return sh.getRange(2, 1, lastRow - 1, width).getValues();
 }
 
 // ==================================================
@@ -228,24 +320,29 @@ function handleAction_(action, data, sessionToken) {
   if (action === 'login') return login_(data);
   if (action === 'logout') return logout_(sessionToken);
   if (action === 'getAuthStatus') return { authenticated: !!getAuthUser_(sessionToken) };
-  if (action === 'getAllData') return getAllDataByClass_();
+  if (action === 'getAllData') return getAllDataCached_(!!(data && data.force));
   // Anyone with the link may add attendance; changing an existing record requires login.
   if (action === 'saveAttendance') return saveAttendanceByClass_(data, !!getAuthUser_(sessionToken));
 
   // Student/subject management, attendance corrections and system settings require a valid session.
   requireAuth_(sessionToken);
-  return withScriptLock_(function () {
+  if (action === 'getSheetInfo') {
+    const ss = getSpreadsheet_();
+    return { sheetId: getSheetId_(), name: ss.getName(), tabs: ss.getSheets().length };
+  }
+  try {
+    return withScriptLock_(function () {
     switch (action) {
       case 'addStudent':       return addStudentByClass_(data);
       case 'addBulkStudents':  return addBulkStudentsByClass_(data);
       case 'updateStudent':    return updateStudentByClass_(data);
-      case 'deleteStudent':    return deleteByClassId_(data.id, 'STU_');
+      case 'deleteStudent':    return deleteByClassId_(data.id, 'STU_', data.expect);
       case 'addSubject':       return addSubjectByClass_(data);
       case 'addBulkSubjects':  return addBulkSubjectsByClass_(data);
       case 'updateSubject':    return updateSubjectByClass_(data);
-      case 'deleteSubject':    return deleteByClassId_(data.id, 'SUB_');
+      case 'deleteSubject':    return deleteByClassId_(data.id, 'SUB_', data.expect);
       case 'updateAttendance': return updateAttendanceByClass_(data);
-      case 'deleteAttendance': return deleteByClassId_(data.id, 'ATT_');
+      case 'deleteAttendance': return deleteByClassId_(data.id, 'ATT_', data.expect);
       case 'updateSheetId':
         if (!data || !/^[A-Za-z0-9_-]{20,120}$/.test(String(data.sheetId || ''))) {
           throw new Error('รูปแบบ Google Sheet ID ไม่ถูกต้อง');
@@ -254,7 +351,10 @@ function handleAction_(action, data, sessionToken) {
         return { ok: true, message: 'บันทึก Sheet ID ใหม่แล้ว' };
       default: throw new Error('ไม่รู้จัก action: ' + action);
     }
-  });
+    });
+  } finally {
+    cacheClearData_(); // ข้อมูลเปลี่ยนแล้ว → ล้างแคชเสมอ (แม้เกิด error กลางคัน)
+  }
 }
 
 // ==================================================
@@ -469,15 +569,23 @@ function classSheetName_(baseName, cls) {
   return baseName + '-' + normalized;
 }
 
+// ดึงรายชื่อชีตทั้งหมดด้วยการเรียกครั้งเดียว (เดิมเรียก getSheetByName ~30 ครั้งต่อคำขอ)
+let SHEET_MAP_ = null;
+function getSheetMap_() {
+  if (!SHEET_MAP_) {
+    SHEET_MAP_ = {};
+    getSpreadsheet_().getSheets().forEach(function (sh) { SHEET_MAP_[sh.getName()] = sh; });
+  }
+  return SHEET_MAP_;
+}
+
 function dataSheetEntries_(baseName) {
-  const ss = getSpreadsheet_();
+  const map = getSheetMap_();
   const entries = [];
-  const legacy = ss.getSheetByName(baseName);
-  if (legacy) entries.push({ name: baseName, cls: '', sheet: legacy });
+  if (map[baseName]) entries.push({ name: baseName, cls: '', sheet: map[baseName] });
   CLASS_LIST.forEach(function (cls) {
     const name = baseName + '-' + cls;
-    const sh = ss.getSheetByName(name);
-    if (sh) entries.push({ name: name, cls: cls, sheet: sh });
+    if (map[name]) entries.push({ name: name, cls: cls, sheet: map[name] });
   });
   return entries;
 }
@@ -486,7 +594,7 @@ function ensureClassSheet__(baseName, cls) {
   const name = classSheetName_(baseName, cls);
   const ss = getSpreadsheet_();
   let sh = ss.getSheetByName(name);
-  if (!sh) sh = ss.insertSheet(name);
+  if (!sh) { sh = ss.insertSheet(name); SHEET_MAP_ = null; }
   let headers = SHEET_DEFS[baseName].slice();
   if (baseName === 'Attendance') headers.push('attendance_student_class');
   if (sh.getLastRow() === 0) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -528,13 +636,12 @@ function getAllDataByClass_() {
   const studentClasses = {};
   const subjectClasses = {};
   dataSheetEntries_('Students').forEach(function (entry) {
-    entry.sheet.getDataRange().getValues().slice(1).forEach(function (r, i) {
+    readRows_(entry.sheet, 4).forEach(function (r, i) {
       if (!r || String(r[0]) === '') return;
       const cls = normalizeClass_(r[2] || entry.cls);
       result.students.push({
         _id: encodeRowId_('STU_', i + 2, entry.name),
-        student_id: String(r[0]), student_name: String(r[1]), student_class: cls,
-        created_at: r[3] ? String(r[3]) : ''
+        student_id: String(r[0]), student_name: String(r[1]), student_class: cls
       });
       const studentKey = String(r[0]);
       if (!studentClasses[studentKey]) studentClasses[studentKey] = [];
@@ -543,13 +650,12 @@ function getAllDataByClass_() {
   });
 
   dataSheetEntries_('Subjects').forEach(function (entry) {
-    entry.sheet.getDataRange().getValues().slice(1).forEach(function (r, i) {
+    readRows_(entry.sheet, 3).forEach(function (r, i) {
       if (!r || String(r[0]) === '') return;
       const cls = normalizeClass_(r[1] || entry.cls);
       result.subjects.push({
         _id: encodeRowId_('SUB_', i + 2, entry.name),
-        subject_name: String(r[0]), subject_class: cls,
-        created_at: r[2] ? String(r[2]) : ''
+        subject_name: String(r[0]), subject_class: cls
       });
       const subjectKey = String(r[0]);
       if (!subjectClasses[subjectKey]) subjectClasses[subjectKey] = [];
@@ -558,7 +664,7 @@ function getAllDataByClass_() {
   });
 
   dataSheetEntries_('Attendance').forEach(function (entry) {
-    entry.sheet.getDataRange().getValues().slice(1).forEach(function (r, i) {
+    readRows_(entry.sheet, 7).forEach(function (r, i) {
       if (!r || !r[0]) return;
       let cls = normalizeClass_(r[6] || entry.cls || '');
       if (!cls) {
@@ -572,7 +678,7 @@ function getAllDataByClass_() {
         _id: encodeRowId_('ATT_', i + 2, entry.name),
         attendance_date: normalizeDate_(r[0]), attendance_student_id: String(r[1]),
         attendance_subject: String(r[2]), attendance_status: String(r[3]),
-        attendance_notes: String(r[4] || ''), created_at: r[5] ? String(r[5]) : '',
+        attendance_notes: String(r[4] || ''),
         attendance_student_class: cls || ''
       });
     });
@@ -608,24 +714,36 @@ function addStudentByClass_(data) {
   return { ok: true };
 }
 
+// อ่านข้อมูลครั้งเดียว แล้วเขียนทีเดียวต่อชั้น (เดิมอ่านทั้งไฟล์ซ้ำทุกคน → ช้ามาก)
 function addBulkStudentsByClass_(data) {
-  const result = { ok: true, added: 0, skipped: 0 };
-  (data.list || []).forEach(function (student) {
-    try {
-      addStudentByClass_(student);
-      result.added++;
-    } catch (err) {
-      if (String(err.message).indexOf('ซ้ำ') !== -1) result.skipped++;
-      else throw err;
-    }
+  const existing = new Set(getAllDataByClass_().students.map(function (s) {
+    return normalizeClass_(s.student_class) + '|' + String(s.student_id);
+  }));
+  const byClass = {};
+  let added = 0, skipped = 0;
+  (data.list || []).forEach(function (s) {
+    const cls = normalizeClass_(s.student_class);
+    if (CLASS_LIST.indexOf(cls) === -1) throw new Error('ชั้นเรียนไม่ถูกต้อง: ' + s.student_class);
+    const key = cls + '|' + String(s.student_id);
+    if (existing.has(key)) { skipped++; return; }
+    existing.add(key);
+    if (!byClass[cls]) byClass[cls] = [];
+    byClass[cls].push([s.student_id, s.student_name, cls, new Date()]);
+    added++;
   });
-  return result;
+  Object.keys(byClass).forEach(function (cls) {
+    const sh = ensureClassSheet__('Students', cls);
+    const rows = byClass[cls];
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, 4).setValues(rows);
+  });
+  return { ok: true, added: added, skipped: skipped };
 }
 
 function updateStudentByClass_(data) {
   const loc = decodeRowId_(data.id, 'STU_', 'Students');
   const row = loc.sheet.getRange(loc.row, 1, 1, 4).getValues()[0];
   if (!row || String(row[0]) === '') throw new Error('ไม่พบข้อมูลนักเรียน กรุณารีเฟรช');
+  if (!rowMatchesExpect_(loc.sheet, loc.row, data.expect, 2)) throw new Error('ข้อมูลมีการเปลี่ยนแปลงแล้ว กรุณารีเฟรชแล้วลองใหม่');
   const cls = normalizeClass_(data.student_class);
   const duplicate = getAllDataByClass_().students.some(function (s) {
     return s._id !== data.id && String(s.student_id) === String(data.student_id) && normalizeClass_(s.student_class) === cls;
@@ -652,23 +770,31 @@ function addSubjectByClass_(data) {
 }
 
 function addBulkSubjectsByClass_(data) {
-  const result = { ok: true, added: 0, skipped: 0 };
+  const cls = normalizeClass_(data.subject_class);
+  if (CLASS_LIST.indexOf(cls) === -1) throw new Error('ชั้นเรียนไม่ถูกต้อง: ' + data.subject_class);
+  const existing = new Set(getAllDataByClass_().subjects.map(function (s) {
+    return normalizeClass_(s.subject_class) + '|' + String(s.subject_name);
+  }));
+  const rows = [];
+  let skipped = 0;
   (data.list || []).forEach(function (name) {
-    try {
-      addSubjectByClass_({ subject_name: name, subject_class: data.subject_class });
-      result.added++;
-    } catch (err) {
-      if (String(err.message).indexOf('ซ้ำ') !== -1) result.skipped++;
-      else throw err;
-    }
+    const key = cls + '|' + String(name);
+    if (existing.has(key)) { skipped++; return; }
+    existing.add(key);
+    rows.push([name, cls, new Date()]);
   });
-  return result;
+  if (rows.length) {
+    const sh = ensureClassSheet__('Subjects', cls);
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, 3).setValues(rows);
+  }
+  return { ok: true, added: rows.length, skipped: skipped };
 }
 
 function updateSubjectByClass_(data) {
   const loc = decodeRowId_(data.id, 'SUB_', 'Subjects');
   const row = loc.sheet.getRange(loc.row, 1, 1, 3).getValues()[0];
   if (!row || String(row[0]) === '') throw new Error('ไม่พบข้อมูลวิชา กรุณารีเฟรช');
+  if (!rowMatchesExpect_(loc.sheet, loc.row, data.expect, 1)) throw new Error('ข้อมูลมีการเปลี่ยนแปลงแล้ว กรุณารีเฟรชแล้วลองใหม่');
   const cls = normalizeClass_(data.subject_class);
   const duplicate = getAllDataByClass_().subjects.some(function (s) {
     return s._id !== data.id && String(s.subject_name) === String(data.subject_name) && normalizeClass_(s.subject_class) === cls;
@@ -684,10 +810,22 @@ function updateSubjectByClass_(data) {
   return { ok: true };
 }
 
-function deleteByClassId_(id, prefix) {
+// ป้องกัน ID ที่เป็นเลขแถวล้าสมัย (มีคนลบแถวอื่นไปแล้ว แถวเลื่อน) → ตรวจว่าแถวตรงกับที่ผู้ใช้เห็นจริง
+function rowMatchesExpect_(sh, row, expect, cols) {
+  if (expect == null || expect === '') return true;
+  if (row > sh.getLastRow()) return false;
+  const vals = sh.getRange(row, 1, 1, cols).getValues()[0];
+  return vals.map(function (v) { return normalizeDate_(v); }).join('|') === String(expect);
+}
+
+function deleteByClassId_(id, prefix, expect) {
   const baseName = prefix === 'STU_' ? 'Students' : prefix === 'SUB_' ? 'Subjects' : 'Attendance';
   const loc = decodeRowId_(id, prefix, baseName);
   if (loc.row > loc.sheet.getLastRow()) throw new Error('ไม่พบข้อมูล กรุณารีเฟรช');
+  const cols = prefix === 'ATT_' ? 3 : prefix === 'STU_' ? 2 : 1;
+  if (!rowMatchesExpect_(loc.sheet, loc.row, expect, cols)) {
+    throw new Error('ข้อมูลมีการเปลี่ยนแปลงแล้ว กรุณารีเฟรชแล้วลองใหม่ (ป้องกันลบผิดแถว)');
+  }
   loc.sheet.deleteRow(loc.row);
   return { ok: true };
 }
@@ -814,6 +952,7 @@ function saveAttendanceByClass_(records, allowUpdates) {
       const rows = insertsByClass[cls];
       sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
     });
+    cacheClearData_();
     return { ok: true, inserted: inserted, updated: updated, skipped: skipped };
   });
 }
@@ -821,6 +960,7 @@ function saveAttendanceByClass_(records, allowUpdates) {
 function updateAttendanceByClass_(data) {
   const loc = decodeRowId_(data.id, 'ATT_', 'Attendance');
   if (loc.row > loc.sheet.getLastRow()) throw new Error('ไม่พบข้อมูลรายการ กรุณารีเฟรช');
+  if (!rowMatchesExpect_(loc.sheet, loc.row, data.expect, 3)) throw new Error('ข้อมูลมีการเปลี่ยนแปลงแล้ว กรุณารีเฟรชแล้วลองใหม่');
   loc.sheet.getRange(loc.row, 4, 1, 2).setValues([[data.attendance_status, data.attendance_notes || '']]);
   return { ok: true };
 }

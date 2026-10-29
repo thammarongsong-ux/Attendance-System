@@ -943,11 +943,6 @@ function clearAllStatus() {
 }
 
 async function saveAttendance() {
-  if (!authToken) {
-    pendingPageId = '';
-    Swal.fire({ icon: 'info', title: 'ต้องเข้าสู่ระบบก่อนบันทึก', confirmButtonText: 'เข้าสู่ระบบ', confirmButtonColor: '#059669' }).then(result => { if (result.isConfirmed) openLogin(); });
-    return;
-  }
   const date    = document.getElementById('attendance-date').value;
   const cls     = normalizeClass(document.getElementById('attendance-class').value);
   const subject = document.getElementById('attendance-subject').value;

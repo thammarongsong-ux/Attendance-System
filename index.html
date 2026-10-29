@@ -882,15 +882,14 @@ function loadStudentsForAttendance() {
     );
     const curStatus = rec ? rec.attendance_status : '';
     const curNotes  = rec ? (rec.attendance_notes || '') : '';
-    const history = allData.attendance.filter(r =>
-      String(r.attendance_student_id) === String(st.student_id) && attendanceMatchesClass(r, st.student_class)
-    );
-    const h = {
-      มา: history.filter(r => r.attendance_status === 'มา').length,
-      สาย: history.filter(r => r.attendance_status === 'สาย').length,
-      ลา: history.filter(r => r.attendance_status === 'ลา').length,
-      ขาด: history.filter(r => r.attendance_status === 'ขาด').length
-    };
+    const h = { มา:0, สาย:0, ลา:0, ขาด:0 };
+  const history = [];
+  for (const r of allData.attendance) {
+    if (String(r.attendance_student_id) === String(st.student_id) && attendanceMatchesClass(r, st.student_class)) {
+      h[r.attendance_status] = (h[r.attendance_status] || 0) + 1;
+      history.push(r);
+    }
+  }
     const total = h.มา + h.สาย + h.ลา + h.ขาด;
     const rate = total ? (((h.มา + h.สาย) / total) * 100).toFixed(0) : '0';
 
@@ -898,22 +897,22 @@ function loadStudentsForAttendance() {
     const icons = { มา:'✅', สาย:'⏰', ลา:'📝', ขาด:'❌' };
 
     html += `
-      <div class="student-card bg-white ${curStatus ? `border-${statusColors[curStatus]}-300` : 'border-gray-200'} p-3 sm:p-4 rounded-2xl border-2">
+      <div class="student-card bg-white ${curStatus ? `border-${statusColors[curStatus]}-300` : 'border-gray-200'} p-3 sm:p-4 rounded-xl border">
         <div class="flex flex-col gap-2">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="inline-flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg text-sm font-semibold text-gray-800 whitespace-nowrap">${esc(st.student_id)}</span>
-            <span class="inline-flex items-center gap-2 flex-1 min-w-0 font-medium text-base truncate">${esc(st.student_name)}</span>
-            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold whitespace-nowrap ${curStatus ? `bg-${statusColors[curStatus]}-100 text-${statusColors[curStatus]}-800` : 'bg-gray-100 text-gray-400'} ">
-              ${curStatus ? `${icons[curStatus]} ${curStatus}` : '<span class="opacity-60">ไม่ได้เลือก</span>'}
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="inline-flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-800 whitespace-nowrap">${esc(st.student_id)}</span>
+            <span class="inline-flex items-center gap-2 flex-1 min-w-0 font-medium text-sm sm:text-base truncate">${esc(st.student_name)}</span>
+            <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold whitespace-nowrap ${curStatus ? `bg-${statusColors[curStatus]}-100 text-${statusColors[curStatus]}-800` : 'bg-gray-100 text-gray-400'} ">
+              ${curStatus ? `${icons[curStatus]} ${curStatus}` : '<span class="opacity-60">ยังไม่ได้เลือก</span>'}
             </span>
           </div>
-          <div class="hidden sm:flex sm:items-center sm:gap-3 text-xs text-gray-500">
-            <span class="whitespace-nowrap">ประวัติ: มา ${h.มา} | สาย ${h.สาย} | ลา ${h.ลา} | ขาด ${h.ขาด}</span>
+          <div class="flex items-center gap-3 flex-wrap text-xs text-gray-500">
+            <span class="whitespace-nowrap">ประวัติ: มา ${h.มา} · สาย ${h.สาย} · ลา ${h.ลา} · ขาด ${h.ขาด}</span>
             ${total ? `<span class="font-semibold ${+rate >= 90 ? 'text-green-600' : +rate >= 75 ? 'text-yellow-600' : 'text-red-600'}">${rate}%</span>` : ''}
           </div>
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="flex items-center flex-wrap gap-2">
             ${STATUS_LIST.map(v => `
-              <label class="cursor-pointer inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-sm font-semibold
+              <label class="inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-sm font-semibold
                 border-2 border-transparent ${curStatus === v ? `bg-${statusColors[v]}-500 text-white` : `border-${statusColors[v]}-400 text-${statusColors[v]}-700 hover:bg-${statusColors[v]}-50`}
                 onchange="updateSelectedStatus(this, '${esc(st.student_id)}')">
                 <input type="radio" name="status-${esc(st.student_id)}" value="${v}" class="status-radio hidden" ${curStatus === v ? 'checked' : ''}">

@@ -125,23 +125,25 @@ function requireAuth_(token) {
 
 function login_(data) {
   const cache = CacheService.getScriptCache();
-  const attemptedUsername = String(data && data.username || '').slice(0, 80);
+  const attemptedUsername = String(data && data.username || '').trim().slice(0, 80);
   const failureKey = AUTH_LOGIN_FAILURE_KEY + '_' + hashPassword_(attemptedUsername).slice(0, 16);
   const failedAttempts = parseInt(cache.get(failureKey) || '0', 10);
+  const username = INITIAL_LOGIN_USERNAME;
+  const passwordHash = INITIAL_LOGIN_PASSWORD_HASH;
+  const credentialsMatch = !!data && attemptedUsername === username &&
+    hashPassword_(String(data.password || '')) === passwordHash;
+
+  // A valid owner login must recover immediately, even if earlier typos triggered the cooldown.
+  if (credentialsMatch) {
+    cache.remove(failureKey);
+    return createAuthSession_(username);
+  }
   if (failedAttempts >= AUTH_LOGIN_FAILURE_LIMIT) {
     throw new Error('พยายามเข้าสู่ระบบผิดหลายครั้ง กรุณารอ 15 นาทีแล้วลองใหม่');
   }
 
-  const username = INITIAL_LOGIN_USERNAME;
-  const passwordHash = INITIAL_LOGIN_PASSWORD_HASH;
-  if (!data || String(data.username || '') !== username ||
-      hashPassword_(String(data.password || '')) !== passwordHash) {
-    cache.put(failureKey, String(failedAttempts + 1), AUTH_LOGIN_LOCK_SECONDS);
-    throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
-  }
-
-  cache.remove(failureKey);
-  return createAuthSession_(username);
+  cache.put(failureKey, String(failedAttempts + 1), AUTH_LOGIN_LOCK_SECONDS);
+  throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
 }
 
 function logout_(token) {

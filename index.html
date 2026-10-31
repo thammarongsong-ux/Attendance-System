@@ -97,12 +97,16 @@
   .att-row:nth-child(even) { background: #fafbfd; }
   .att-row:hover { background: #fff1f2; }
   .att-row:last-child { border-bottom: 0; }
+  /* แถวที่บันทึกแล้ว (หลังกดบันทึก) — เขียวอ่อน + แถบซ้าย ให้เห็นว่าบันทึกเข้าชีตแล้ว */
+  .att-row.is-saved { background: #f0fdf4; box-shadow: inset 3px 0 0 #22c55e; }
+  .att-row.is-saved .att-note::placeholder { color: #15803d; font-weight: 600; }
   .att-no { font-weight: 700; color: #374151; text-align: center; }
   .att-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .att-status { display: inline-flex; gap: .3rem; flex-wrap: nowrap; }
   .att-note { min-height: 36px; padding: .3rem .6rem; font-size: 14px; width: 100%;
     border: 1px solid #dce1e9; border-radius: .6rem; }
   .att-note:focus { outline: none; border-color: #f43f5e; box-shadow: 0 0 0 3px rgba(244,63,94,.14); }
+  .att-note.is-invalid { border-color: #ef4444; background: #fef2f2; }
   .att-hist { font-size: .78rem; text-align: center; color: #6b7280; line-height: 1.2; }
   .att-chip { cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
     min-width: 3.1rem; height: 36px; padding: 0 .6rem; border-radius: 999px; font-size: .88rem;
@@ -225,14 +229,19 @@
 <div id="statistics-page" class="page hidden">
   <div class="text-center mb-6">
     <h2 class="text-2xl sm:text-3xl font-bold text-gray-800">📊 สถิติการเข้าเรียน</h2>
-    <p class="text-gray-500 text-sm sm:text-base mt-1">กรองได้ตาม <b>ชั้นเรียน</b> · <b>รายวิชา</b> · <b>ช่วงเวลา</b> ผสมกันได้</p>
+    <p class="text-gray-500 text-sm sm:text-base mt-1">ดูได้ทั้ง <b>ภาพรวมทั้งชั้น</b> และ <b>รายบุคคล</b> · ส่งออกเป็น Excel / Word ได้</p>
+  </div>
+
+  <div class="flex flex-wrap justify-center gap-2 mb-5">
+    <button id="stats-tab-overview" onclick="setStatsMode('overview')" class="btn bg-red-600 text-white">📊 ภาพรวม</button>
+    <button id="stats-tab-student" onclick="setStatsMode('student')" class="btn bg-white text-gray-700 border border-gray-200">👤 รายบุคคล</button>
   </div>
 
   <div class="card p-5 sm:p-6 mb-6">
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div>
         <label class="block text-sm font-semibold mb-2 text-gray-700">🎓 ชั้นเรียน</label>
-        <select id="stats-class" class="field" onchange="updateStatsSubjectDropdown()"></select>
+        <select id="stats-class" class="field" onchange="updateStatsSubjectDropdown(); updateStatsStudentDropdown()"></select>
       </div>
       <div>
         <label class="block text-sm font-semibold mb-2 text-gray-700">📚 รายวิชา</label>
@@ -254,6 +263,11 @@
       </div>
     </div>
 
+    <div id="stats-student-wrap" class="hidden mt-4 p-4 bg-rose-50 rounded-2xl border border-rose-100">
+      <label class="block text-sm font-semibold mb-2 text-gray-700">👤 เลือกนักเรียน (มุมมองรายบุคคล)</label>
+      <select id="stats-student" class="field" onchange="loadStatistics()"></select>
+    </div>
+
     <div id="custom-date-range" class="hidden mt-4 p-4 bg-blue-50 rounded-2xl border border-blue-100">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label class="block text-sm font-semibold mb-2 text-gray-700">📅 ตั้งแต่</label><input type="date" id="start-date" class="field"></div>
@@ -261,7 +275,12 @@
       </div>
     </div>
 
-    <p class="text-xs text-gray-500 mt-3">💡 ตัวอย่าง: เลือก <b>ม.3</b> + <b>คณิตศาสตร์</b> + <b>เดือนนี้</b> เพื่อดูเฉพาะวิชานั้นในเดือนนี้</p>
+    <div class="mt-4 flex flex-wrap gap-2">
+      <button onclick="exportStats('xlsx')" class="btn bg-emerald-600 hover:bg-emerald-700 text-white">📊 ส่งออก Excel (.xlsx)</button>
+      <button onclick="exportStats('docx')" class="btn bg-blue-600 hover:bg-blue-700 text-white">📄 ส่งออก Word (.docx)</button>
+    </div>
+
+    <p class="text-xs text-gray-500 mt-3">💡 ไฟล์ที่ส่งออกจะใช้ <b>ชั้นเรียน · รายวิชา · ช่วงเวลา</b> ที่เลือกอยู่ และเป็นข้อมูลของ<b>โหมดที่กำลังดู</b> (ภาพรวม/รายบุคคล)</p>
   </div>
 
   <div id="statistics-content" class="card p-5 sm:p-6">
@@ -493,9 +512,14 @@ const PROTECTED_PAGES = new Set(['add-student', 'add-subject', 'manage-data', 'a
 /* ==================================================
    API LAYER
    ================================================== */
+// อ่านข้อมูลทั้งหมดใช้เวลานานกว่า (อ่านทุกแท็บของ Sheet) → ให้เวลา 60 วิ ส่วนคำสั่งอื่น 30 วิ
+const API_TIMEOUT_MS = 30000;
+const API_TIMEOUT_READ_MS = 60000;
+
 async function callApi(action, data = null, tokenOverride = null) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  const timeoutMs = action === 'getAllData' ? API_TIMEOUT_READ_MS : API_TIMEOUT_MS;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(WEB_APP_URL, {
       method: 'POST',
@@ -531,21 +555,34 @@ async function callApi(action, data = null, tokenOverride = null) {
 
 const DATA_CACHE_STORAGE_KEY = 'attendance-data-cache-v1';
 let studentClassIndex = new Map(); // student_id -> Set(ชั้น)
+let studentLookup = new Map();     // "ชั้น|เลขที่" -> student (ค้นหาเร็ว ไม่ต้อง .find ซ้ำทุกแถว)
+let studentById = new Map();       // เลขที่ -> student (สำรองสำหรับข้อมูลเก่าที่ไม่รู้ชั้น)
 let lastLoadInfo = null;
 
 // สร้างดัชนีครั้งเดียวหลังโหลด เพื่อไม่ต้องวนค้นหาซ้ำทุกแถว (สาเหตุที่หน้าค้าง)
 function rebuildIndexes() {
   studentClassIndex = new Map();
+  studentLookup = new Map();
+  studentById = new Map();
   allData.students.forEach(s => {
     const id = String(s.student_id);
     if (!studentClassIndex.has(id)) studentClassIndex.set(id, new Set());
     studentClassIndex.get(id).add(normalizeClass(s.student_class));
+    const key = normalizeClass(s.student_class) + '|' + id;
+    if (!studentLookup.has(key)) studentLookup.set(key, s);
+    if (!studentById.has(id)) studentById.set(id, s);
   });
   const validClasses = new Set(ALL_CLASSES.map(normalizeClass));
   allData.attendance.forEach(r => {
     const rc = normalizeClass(r.attendance_student_class || '');
     r._cls = validClasses.has(rc) ? rc : '';
   });
+}
+
+// ค้นหานักเรียนจาก เลขที่ + ชั้น แบบ O(1) (เดิมใช้ .find วนทั้งกองทุกแถว ทำให้ตารางใหญ่ค้าง)
+function findStudentRecord(id, cls) {
+  const key = normalizeClass(cls) + '|' + String(id);
+  return studentLookup.get(key) || studentById.get(String(id)) || null;
 }
 
 function recordClasses(r) {
@@ -579,34 +616,48 @@ function loadCachedData() {
   } catch (_) { return false; }
 }
 
-async function loadAllDataFromSheet(showAlert = false) {
+let dataLoadInFlight = null;
+
+function showLoadSuccessAlert() {
+  Swal.fire({
+    icon: 'success', title: 'โหลดข้อมูลสำเร็จ',
+    html: `<div style="line-height:1.9">👨‍🎓 ${allData.students.length} คน<br>📚 ${allData.subjects.length} วิชา<br>✅ ${allData.attendance.length} รายการ</div>`,
+    timer: 2000, showConfirmButton: false
+  });
+}
+
+// showAlert = แจ้งผลเมื่อโหลดเสร็จ | force = บังคับอ่านชีตใหม่ทั้งหมด (ช้า — ใช้เฉพาะตอนตรวจสอบ)
+async function loadAllDataFromSheet(showAlert = false, force = false) {
+  if (dataLoadInFlight) { // กันยิงซ้ำซ้อน (เช่น ตอนโฟกัสหน้าจอ + ตอนเริ่มโหลด)
+    const ok = await dataLoadInFlight;
+    if (ok && showAlert) showLoadSuccessAlert();
+    return ok;
+  }
   const loadSequence = ++dataLoadSequence;
   setConnectionStatus('loading', '⏳ กำลังโหลดข้อมูล...');
-  try {
-    const t0 = performance.now();
-    const data = await callApi('getAllData', showAlert ? { force: true } : null);
-    lastLoadInfo = { totalMs: Math.round(performance.now() - t0), meta: data._meta || null };
-    if (loadSequence !== dataLoadSequence) return false;
-    applyData(data);
-    saveDataCache({ students: allData.students, subjects: allData.subjects, attendance: allData.attendance });
-    isConnected = true;
-    setConnectionStatus('ok', `✅ เชื่อมต่อแล้ว: ${allData.students.length} นักเรียน, ${allData.subjects.length} วิชา, ${allData.attendance.length} รายการ (โหลด ${(lastLoadInfo.totalMs/1000).toFixed(1)} วิ)`);
-    refreshUI();
-    if (showAlert) {
-      Swal.fire({
-        icon: 'success', title: 'โหลดข้อมูลสำเร็จ',
-        html: `👨‍🎓 ${allData.students.length} คน<br>📚 ${allData.subjects.length} วิชา<br>✅ ${allData.attendance.length} รายการ`,
-        timer: 2000, showConfirmButton: false
-      });
+  dataLoadInFlight = (async () => {
+    try {
+      const t0 = performance.now();
+      const data = await callApi('getAllData', force ? { force: true } : null);
+      lastLoadInfo = { totalMs: Math.round(performance.now() - t0), meta: data._meta || null };
+      if (loadSequence !== dataLoadSequence) return false;
+      applyData(data);
+      saveDataCache({ students: allData.students, subjects: allData.subjects, attendance: allData.attendance });
+      isConnected = true;
+      setConnectionStatus('ok', `✅ เชื่อมต่อแล้ว: ${allData.students.length} นักเรียน, ${allData.subjects.length} วิชา, ${allData.attendance.length} รายการ (โหลด ${(lastLoadInfo.totalMs/1000).toFixed(1)} วิ)`);
+      refreshUI();
+      if (showAlert) showLoadSuccessAlert();
+      return true;
+    } catch (err) {
+      if (loadSequence !== dataLoadSequence) return false;
+      isConnected = false;
+      setConnectionStatus('err', '❌ ' + err.message);
+      if (showAlert) Swal.fire('ผิดพลาด', err.message, 'error');
+      return false;
     }
-    return true;
-  } catch (err) {
-    if (loadSequence !== dataLoadSequence) return false;
-    isConnected = false;
-    setConnectionStatus('err', '❌ ' + err.message);
-    if (showAlert) Swal.fire('ผิดพลาด', err.message, 'error');
-    return false;
-  }
+  })();
+  try { return await dataLoadInFlight; }
+  finally { dataLoadInFlight = null; }
 }
 
 // ⚠️ Web App ที่ deploy อยู่ตอนนี้ส่งคอลัมน์การเช็คชื่อมาผิดที่ 1 ช่อง
@@ -688,6 +739,26 @@ function fmtThaiDate(dateStr) {
 }
 function showLoading(title = 'กำลังดำเนินการ...') {
   Swal.fire({ title, allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+}
+
+// หน้าต่างแจ้งผลหน้าตาเดียวกันทุกครั้งที่เพิ่ม/แก้ไข/ลบข้อมูล
+function notifySuccess(title, detail = '') {
+  return Swal.fire({
+    icon: 'success',
+    title,
+    html: detail ? `<div style="font-size:.95rem;line-height:1.85">${detail}</div>` : undefined,
+    confirmButtonText: 'ตกลง',
+    confirmButtonColor: '#dc2626',
+    timer: 2600,
+    timerProgressBar: true
+  });
+}
+
+// รีเฟรชข้อมูลเบื้องหลังแล้ววาดตารางใหม่ — ไม่บล็อกหน้าจอให้รอโหลดทั้งหมด
+function refreshAfterChange(renderFn) {
+  loadAllDataFromSheet().then(ok => {
+    if (ok && typeof renderFn === 'function') renderFn();
+  });
 }
 
 /* ==================================================
@@ -819,6 +890,7 @@ function initAllClassSelects() {
   fillClassSelect(document.getElementById('attendance-class'));
   fillClassSelect(document.getElementById('stats-class'), { all: true });
   updateStatsSubjectDropdown();
+  updateStatsStudentDropdown();
 }
 
 function updateSubjectDropdown() {
@@ -870,6 +942,7 @@ function refreshUI() {
   renderDashboard();
   updateSubjectDropdown();
   updateStatsSubjectDropdown();
+  updateStatsStudentDropdown();
 }
 
 function renderDashboard() {
@@ -914,7 +987,7 @@ function showStorageInfo() {
 /* ==================================================
    CHECK-IN
    ================================================== */
-function loadStudentsForAttendance() {
+async function loadStudentsForAttendance() {
   const date    = document.getElementById('attendance-date').value;
   const cls     = normalizeClass(document.getElementById('attendance-class').value);
   const subject = document.getElementById('attendance-subject').value;
@@ -923,11 +996,25 @@ function loadStudentsForAttendance() {
     Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่ ชั้นเรียน และวิชา', 'warning'); return;
   }
 
+  const list = document.getElementById('student-list');
+
+  // ครั้งแรกของเครื่อง (ยังไม่มีข้อมูลในเครื่อง) → รอโหลดให้เสร็จก่อน แทนที่จะขึ้นว่า “ไม่พบนักเรียน”
+  if (!allData.students.length) {
+    list.innerHTML = `<div class="text-center py-10 text-gray-500">
+      <div class="animate-pulse text-5xl mb-3">⏳</div><p>กำลังโหลดข้อมูลรายชื่อนักเรียน...</p></div>`;
+    await loadAllDataFromSheet();
+    if (!allData.students.length) {
+      list.innerHTML = `<div class="text-center py-8 text-gray-500">
+        <div class="text-5xl mb-3">⚠️</div><p class="mb-3">โหลดข้อมูลไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อ</p>
+        <button onclick="loadStudentsForAttendance()" class="bg-red-600 hover:bg-red-700 text-white btn">🔄 ลองอีกครั้ง</button></div>`;
+      return;
+    }
+  }
+
   const students = allData.students
     .filter(s => normalizeClass(s.student_class) === cls)
     .sort((a, b) => String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }));
 
-  const list = document.getElementById('student-list');
   if (!students.length) {
     list.innerHTML = `
       <div class="text-center py-8">
@@ -964,8 +1051,10 @@ function loadStudentsForAttendance() {
     <div class="mb-4 flex flex-wrap justify-between items-center gap-2">
       <h3 class="text-xl font-bold">ชั้น ${esc(document.getElementById('attendance-class').value)} — วิชา ${esc(subject)}</h3>
       <div class="text-sm bg-blue-50 px-3 py-2 rounded-2xl border border-blue-100">
-        👥 ${students.length} คน | ✅ เช็คแล้ว ${existingCount} คน | ⏳ ค้าง ${students.length - existingCount} คน
-        | <span id="checkin-feedback-counter" class="font-semibold">เลือก ${existingCount} คน</span>
+        👥 <b id="checkin-total">${students.length}</b> คน
+        · ✅ เช็คแล้ว <b id="checkin-done">${existingCount}</b> คน
+        · ⏳ ค้าง <b id="checkin-pending">${students.length - existingCount}</b> คน
+        · <span id="checkin-feedback-counter" class="font-semibold text-red-600">เลือก ${existingCount} คน</span>
       </div>
     </div>
     <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 mb-4">
@@ -990,7 +1079,7 @@ function loadStudentsForAttendance() {
     const rateColor = rate >= 90 ? 'text-green-600' : rate >= 75 ? 'text-yellow-600' : 'text-red-600';
 
     html += `
-      <div class="att-row">
+      <div class="att-row" data-student-id="${esc(id)}" data-class="${esc(st.student_class)}" data-recorded="${rec ? '1' : '0'}">
         <div class="att-no">${esc(st.student_id)}</div>
         <div class="att-name" title="${esc(st.student_name)}">${esc(st.student_name)}</div>
         <div class="att-status">
@@ -1017,9 +1106,42 @@ function loadStudentsForAttendance() {
   attendanceFormDirty = false;
 }
 
+// อัปเดตตัวเลขสรุป (เลือกแล้ว / บันทึกแล้ว / ค้าง) จาก DOM จริง — ไม่ต้องอ่าน allData ซ้ำ
 function updateCheckinCounter() {
+  const rows = document.querySelectorAll('#student-list .att-row');
+  if (!rows.length) return;
+  let done = 0;
+  rows.forEach(r => { if (r.dataset.recorded === '1') done++; });
+  const selected = document.querySelectorAll('#student-list .status-radio:checked').length;
+
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+  setText('checkin-done', done);
+  setText('checkin-pending', Math.max(rows.length - done, 0));
   const counter = document.getElementById('checkin-feedback-counter');
-  if (counter) counter.textContent = `เลือก ${document.querySelectorAll('#student-list .status-radio:checked').length} คน`;
+  if (counter) {
+    counter.textContent = selected
+      ? `เลือก ${selected} คน`
+      : (done ? `✅ บันทึกแล้ว ${done} คน` : 'เลือก 0 คน');
+  }
+}
+
+// ล้างสถานะที่เลือกไว้หลังบันทึก (ไม่ลบข้อความหมายเหตุ เพื่อไม่ให้ข้อมูลที่พิมพ์ไว้หาย)
+// แล้วทำแถวที่บันทึกแล้วเป็นสีเขียว เพื่อให้เห็นว่าบันทึกเข้าชีตแล้ว
+function clearCheckinSelection(statusByStudent) {
+  document.querySelectorAll('#student-list .att-row').forEach(row => {
+    row.querySelectorAll('.status-radio').forEach(r => { r.checked = false; });
+    const status = statusByStudent ? statusByStudent.get(row.dataset.studentId) : '';
+    if (!status) return;
+    row.classList.add('is-saved');
+    row.dataset.recorded = '1';
+    const note = row.querySelector('.notes-input');
+    if (note && !note.value) note.placeholder = `บันทึกแล้ว: ${status}`;
+  });
+  attendanceFormDirty = false;
+  updateCheckinCounter();
 }
 
 function selectAllStatus(status) {
@@ -1034,6 +1156,17 @@ function clearAllStatus() {
   updateCheckinCounter();
 }
 
+// รวมรายการเช็คชื่อที่มีอยู่แล้วของ วัน/ชั้น/วิชา ที่กำลังทำอยู่ → Map(student_id → record)
+function buildExistingAttendanceMap(date, cls, subject) {
+  const map = new Map();
+  for (const r of allData.attendance) {
+    if (r.attendance_date !== date || r.attendance_subject !== subject) continue;
+    if (!recordClasses(r).includes(cls)) continue;
+    map.set(String(r.attendance_student_id), r);
+  }
+  return map;
+}
+
 async function saveAttendance() {
   if (isSavingAttendance) return;
   const date    = document.getElementById('attendance-date').value;
@@ -1041,24 +1174,80 @@ async function saveAttendance() {
   const subject = document.getElementById('attendance-subject').value;
   if (!date || !cls || !subject) { Swal.fire('แจ้งเตือน', 'ข้อมูลไม่ครบ', 'warning'); return; }
 
-  const students = allData.students.filter(s => normalizeClass(s.student_class) === cls);
-  const records = [];
+  // อ่านจากแถวที่แสดงอยู่จริง (เร็วกว่าวนหา allData + querySelector ต่อคน)
+  const rows = [...document.querySelectorAll('#student-list .att-row')];
+  if (!rows.length) { Swal.fire('แจ้งเตือน', 'ยังไม่มีรายชื่อนักเรียน', 'warning'); return; }
 
-  students.forEach(st => {
-    const radio = document.querySelector(`input[name="status-${CSS.escape(st.student_id)}"]:checked`);
+  const existingMap = buildExistingAttendanceMap(date, cls, subject);
+  const records   = [];   // รายการที่จะส่งบันทึก
+  const conflicts = [];   // รายการเดิมที่ถูกแก้ไข แต่ยังไม่ได้เข้าสู่ระบบ
+  let unchanged = 0;
+  let invalidNotes = 0;
+
+  rows.forEach(row => {
+    const radio = row.querySelector('.status-radio:checked');
     if (!radio) return;
-    const notesInput = document.querySelector(`input.notes-input[data-student-id="${CSS.escape(st.student_id)}"]`);
-    records.push({
-      date,
-      student_id: st.student_id,
-      subject,
-      status: radio.value,
-      notes: notesInput ? notesInput.value.trim() : '',
-      cls: st.student_class // ชั้นของนักเรียน → ให้ backend แยกเก็บคนละชีตตามชั้น (เวอร์ชันเก่าจะเมินฟิลด์นี้)
-    });
+    const id = String(row.dataset.studentId);
+    const noteEl = row.querySelector('.notes-input');
+    const notes = noteEl ? noteEl.value.trim() : '';
+    if (noteEl) noteEl.classList.remove('is-invalid');
+    // backend ปฏิเสธหมายเหตุที่ขึ้นต้นด้วยอักขระสูตร → ตรวจฝั่งหน้าบ้านก่อน เพื่อไม่ให้บันทึกทั้งชุดล้ม
+    if (/^[=+\-@]/.test(notes)) {
+      invalidNotes++;
+      if (noteEl) { noteEl.classList.add('is-invalid'); noteEl.focus(); }
+      return;
+    }
+    const rec = { date, student_id: id, subject, status: radio.value, notes, cls: row.dataset.class || cls };
+    const existing = existingMap.get(id);
+    if (existing) {
+      if (existing.attendance_status === rec.status && String(existing.attendance_notes || '') === notes) {
+        unchanged++;      // ไม่มีอะไรเปลี่ยน ไม่ต้องส่งไปให้เปลืองเวลา
+        return;
+      }
+      if (!authToken) { conflicts.push(rec); return; }  // แก้รายการเดิมต้องเข้าสู่ระบบ
+    }
+    records.push(rec);
   });
 
-  if (!records.length) { Swal.fire('แจ้งเตือน', 'ยังไม่ได้เลือกสถานะนักเรียน', 'warning'); return; }
+  if (invalidNotes) {
+    Swal.fire('แจ้งเตือน', `มีหมายเหตุ ${invalidNotes} ช่องที่ขึ้นต้นด้วย = + - @ กรุณาแก้ไขก่อนบันทึก`, 'warning');
+    return;
+  }
+
+  if (conflicts.length) {
+    const hasNew = records.length > 0;
+    const answer = await Swal.fire({
+      icon: 'warning',
+      title: 'ต้องเข้าสู่ระบบก่อนแก้ไข',
+      html: `<div style="text-align:left;font-size:.95rem;line-height:1.8">
+          มี <b>${conflicts.length}</b> คนที่เคยบันทึกไว้แล้ว แต่สถานะ/หมายเหตุถูกเปลี่ยน<br>
+          <span class="text-gray-600">ระบบอนุญาตให้แก้ไขรายการเดิมได้เมื่อเข้าสู่ระบบ
+          (รายการใหม่ยังบันทึกได้โดยไม่ต้องเข้าสู่ระบบ)<br>เข้าสู่ระบบแล้วกด “บันทึก” อีกครั้ง</span>
+        </div>`,
+      showDenyButton: hasNew,
+      denyButtonText: hasNew ? `บันทึกเฉพาะ ${records.length} รายการใหม่` : '',
+      showCancelButton: true, confirmButtonText: 'เข้าสู่ระบบ', cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#059669', denyButtonColor: '#dc2626'
+    });
+    if (answer.isConfirmed) { openLogin(); return; }
+    if (!hasNew || !answer.isDenied) return;
+  }
+
+  if (!records.length) {
+    Swal.fire({
+      icon: 'info', title: 'ไม่มีรายการเปลี่ยนแปลง',
+      html: unchanged
+        ? `รายการทั้ง <b>${unchanged}</b> คน บันทึกไว้แล้วและไม่มีอะไรเปลี่ยนแปลง`
+        : 'กรุณาเลือกสถานะนักเรียนก่อนกดบันทึก',
+      confirmButtonColor: '#dc2626'
+    });
+    return;
+  }
+
+  if (records.length > 500) {
+    Swal.fire('แจ้งเตือน', 'บันทึกได้ครั้งละไม่เกิน 500 รายการ', 'warning');
+    return;
+  }
 
   isSavingAttendance = true;
   const saveButton = document.getElementById('checkin-save-button');
@@ -1069,34 +1258,53 @@ async function saveAttendance() {
   showLoading('กำลังบันทึกไปยัง Google Sheets...');
   try {
     const res = await callApi('saveAttendance', records);
-    attendanceFormDirty = false;
-    // อัปเดตข้อมูลในเครื่องทันที (ไม่ต้องรอโหลดทั้งฐานข้อมูลใหม่) แล้วค่อยซิงก์เบื้องหลัง
+    const inserted = res.inserted || 0;
+    const updated  = res.updated  || 0;
+    const skipped  = res.skipped  || 0;
+
+    // อัปเดตข้อมูลในเครื่องทันทีโดยใช้ map ที่สร้างไว้แล้ว (ไม่ต้อง find ซ้ำทุกรายการ)
+    const statusByStudent = new Map();
     records.forEach(rec => {
-      const rc = normalizeClass(rec.cls);
-      const existing = allData.attendance.find(r =>
-        r.attendance_date === rec.date && r.attendance_subject === rec.subject &&
-        String(r.attendance_student_id) === String(rec.student_id) &&
-        recordClasses(r).includes(rc));
+      const id = String(rec.student_id);
+      statusByStudent.set(id, rec.status);
+      const existing = existingMap.get(id);
       if (existing) {
         existing.attendance_status = rec.status;
         existing.attendance_notes = rec.notes;
       } else {
-        allData.attendance.push({
-          _id: '', attendance_date: rec.date, attendance_student_id: String(rec.student_id),
+        const added = {
+          _id: '', attendance_date: rec.date, attendance_student_id: id,
           attendance_subject: rec.subject, attendance_status: rec.status, attendance_notes: rec.notes,
-          created_at: '', attendance_student_class: rec.cls, _cls: rc
-        });
+          created_at: '', attendance_student_class: rec.cls, _cls: normalizeClass(rec.cls)
+        };
+        allData.attendance.push(added);
+        existingMap.set(id, added);
       }
     });
+
     renderDashboard();
     Swal.close();
-    loadStudentsForAttendance();
+
+    // ⬇️ ล้างสถานะ/หมายเหตุที่เลือกไว้ออกทันที แล้วทำแถวที่บันทึกแล้วเป็นสีเขียว
+    clearCheckinSelection(statusByStudent);
+
     Swal.fire({
-      icon: 'success', title: 'บันทึกสำเร็จ',
-      text: `เพิ่มใหม่ ${res.inserted} รายการ, อัปเดต ${res.updated} รายการ, ข้ามรายการเดิม ${res.skipped || 0} รายการ`,
-      timer: 2200, showConfirmButton: true
+      icon: 'success',
+      title: '✅ บันทึกการเช็คชื่อสำเร็จ',
+      html: `<div style="text-align:left;font-size:.95rem;line-height:1.85">
+          <div>📅 ${fmtThaiDate(date)} · 🎓 ${esc(document.getElementById('attendance-class').value)} · 📚 ${esc(subject)}</div>
+          <hr style="margin:.5rem 0;border:0;border-top:1px solid #eee">
+          <div>👨‍🎓 บันทึกครั้งนี้ <b>${records.length}</b> คน</div>
+          <div>➕ เพิ่มใหม่ <b>${inserted}</b> รายการ</div>
+          <div>✏️ อัปเดต <b>${updated}</b> รายการ</div>
+          ${skipped ? `<div>⏭️ ข้ามรายการเดิม <b>${skipped}</b> รายการ</div>` : ''}
+          ${unchanged ? `<div style="color:#6b7280">ไม่มีการเปลี่ยนแปลง ${unchanged} รายการ</div>` : ''}
+        </div>`,
+      confirmButtonText: 'ตกลง',
+      confirmButtonColor: '#dc2626'
     });
-    loadAllDataFromSheet(); // ซิงก์เบื้องหลัง เพื่อให้ได้ _id จริงของรายการใหม่
+
+    loadAllDataFromSheet(); // ซิงก์เบื้องหลัง (ไม่บังคับอ่านใหม่) เพื่อให้ได้ _id จริงของรายการใหม่
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   } finally {
@@ -1127,9 +1335,9 @@ async function addStudent(e) {
   showLoading('กำลังบันทึก...');
   try {
     await callApi('addStudent', { student_id: id, student_name: name, student_class: cls });
-    Swal.fire('สำเร็จ', 'เพิ่มนักเรียนแล้ว', 'success');
+    notifySuccess('✅ เพิ่มนักเรียนสำเร็จ', `👤 ${esc(id)}. ${esc(name)}<br>🎓 ${esc(cls)}`);
     document.getElementById('add-student-form').reset();
-    await loadAllDataFromSheet();
+    loadAllDataFromSheet();
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1153,9 +1361,9 @@ async function addBulkStudents(e) {
   showLoading(`กำลังเพิ่ม ${list.length} คน...`);
   try {
     const res = await callApi('addBulkStudents', { list });
-    Swal.fire('สำเร็จ', `เพิ่ม ${res.added} คน${res.skipped ? ` (ข้ามซ้ำ ${res.skipped})` : ''}`, 'success');
+    notifySuccess('✅ เพิ่มนักเรียนสำเร็จ', `➕ เพิ่มใหม่ ${res.added} คน${res.skipped ? `<br>⏭️ ข้ามรายการซ้ำ ${res.skipped} คน` : ''}`);
     document.getElementById('bulk-add-form').reset();
-    await loadAllDataFromSheet();
+    loadAllDataFromSheet();
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1188,9 +1396,9 @@ async function importStudents(e) {
   showLoading(`กำลังนำเข้า ${list.length} คน...`);
   try {
     const res = await callApi('addBulkStudents', { list });
-    Swal.fire('สำเร็จ', `นำเข้า ${res.added} คน${res.skipped ? ` (ข้ามซ้ำ ${res.skipped})` : ''}`, 'success');
+    notifySuccess('✅ นำเข้าข้อมูลสำเร็จ', `📥 นำเข้า ${res.added} คน${res.skipped ? `<br>⏭️ ข้ามรายการซ้ำ ${res.skipped} คน` : ''}`);
     document.getElementById('import-form').reset();
-    await loadAllDataFromSheet();
+    loadAllDataFromSheet();
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1213,9 +1421,9 @@ async function addSubject(e) {
   showLoading('กำลังบันทึก...');
   try {
     await callApi('addSubject', { subject_name: name, subject_class: cls });
-    Swal.fire('สำเร็จ', 'เพิ่มวิชาแล้ว', 'success');
+    notifySuccess('✅ เพิ่มวิชาสำเร็จ', `📚 ${esc(name)}<br>🎓 ${esc(cls)}`);
     document.getElementById('add-subject-form').reset();
-    await loadAllDataFromSheet();
+    loadAllDataFromSheet();
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1230,9 +1438,9 @@ async function addBulkSubjects(e) {
   showLoading(`กำลังเพิ่ม ${names.length} วิชา...`);
   try {
     const res = await callApi('addBulkSubjects', { list: names, subject_class: cls });
-    Swal.fire('สำเร็จ', `เพิ่ม ${res.added} วิชา${res.skipped ? ` (ข้ามซ้ำ ${res.skipped})` : ''}`, 'success');
+    notifySuccess('✅ เพิ่มวิชาสำเร็จ', `📚 เพิ่มใหม่ ${res.added} วิชา${res.skipped ? `<br>⏭️ ข้ามรายการซ้ำ ${res.skipped} วิชา` : ''}`);
     document.getElementById('bulk-subject-form').reset();
-    await loadAllDataFromSheet();
+    loadAllDataFromSheet();
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1354,9 +1562,8 @@ async function editStudent(id) {
   showLoading('กำลังบันทึก...');
   try {
     await callApi('updateStudent', { id, ...value, expect: `${s.student_id}|${s.student_name}` });
-    await loadAllDataFromSheet();
-    loadStudentsData();
-    Swal.fire('สำเร็จ', 'บันทึกแล้ว', 'success');
+    notifySuccess('✅ แก้ไขข้อมูลนักเรียนสำเร็จ', `👤 ${esc(value.student_id)}. ${esc(value.student_name)}<br>🎓 ${esc(value.student_class)}`);
+    refreshAfterChange(loadStudentsData);
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1389,9 +1596,8 @@ async function editSubject(id) {
   showLoading('กำลังบันทึก...');
   try {
     await callApi('updateSubject', { id, ...value, expect: String(s.subject_name) });
-    await loadAllDataFromSheet();
-    loadSubjectsData();
-    Swal.fire('สำเร็จ', 'บันทึกแล้ว', 'success');
+    notifySuccess('✅ แก้ไขข้อมูลวิชาสำเร็จ', `📚 ${esc(value.subject_name)}<br>🎓 ${esc(value.subject_class)}`);
+    refreshAfterChange(loadSubjectsData);
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1411,9 +1617,8 @@ async function deleteStudent(id) {
   showLoading('กำลังลบ...');
   try {
     await callApi('deleteStudent', { id, expect: `${s.student_id}|${s.student_name}` });
-    await loadAllDataFromSheet();
-    loadStudentsData();
-    Swal.fire('สำเร็จ', 'ลบแล้ว', 'success');
+    notifySuccess('🗑️ ลบข้อมูลนักเรียนแล้ว', `👤 ${esc(s.student_id)}. ${esc(s.student_name)}<br>🎓 ${esc(s.student_class)}`);
+    refreshAfterChange(loadStudentsData);
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1432,9 +1637,8 @@ async function deleteSubject(id) {
   showLoading('กำลังลบ...');
   try {
     await callApi('deleteSubject', { id, expect: String(s.subject_name) });
-    await loadAllDataFromSheet();
-    loadSubjectsData();
-    Swal.fire('สำเร็จ', 'ลบแล้ว', 'success');
+    notifySuccess('🗑️ ลบข้อมูลวิชาแล้ว', `📚 ${esc(s.subject_name)}<br>🎓 ${esc(s.subject_class)}`);
+    refreshAfterChange(loadSubjectsData);
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1474,9 +1678,9 @@ function loadAttendanceData() {
         </tr></thead>
         <tbody>
         ${list.map(r => {
-          const st = allData.students.find(s => String(s.student_id) === String(r.attendance_student_id));
+          const st = findStudentRecord(r.attendance_student_id, r._cls || r.attendance_student_class);
           const name = st ? st.student_name : 'ไม่พบข้อมูล';
-          const sclass = st ? st.student_class : '-';
+          const sclass = st ? st.student_class : (r._cls || '-');
           return `<tr class="hover:bg-gray-50">
             <td class="border px-3 py-2">${fmtThaiDate(r.attendance_date)}</td>
             <td class="border px-3 py-2 text-center">${esc(r.attendance_student_id)}</td>
@@ -1528,9 +1732,8 @@ async function editAttendance(id) {
   showLoading('กำลังบันทึก...');
   try {
     await callApi('updateAttendance', { id, ...value, expect: `${r.attendance_date}|${r.attendance_student_id}|${r.attendance_subject}` });
-    await loadAllDataFromSheet();
-    loadAttendanceData();
-    Swal.fire('สำเร็จ', 'บันทึกแล้ว', 'success');
+    notifySuccess('✅ แก้ไขการเช็คชื่อสำเร็จ', `👤 ${esc(st?.student_name || '-')}<br>📅 ${fmtThaiDate(r.attendance_date)} · 📚 ${esc(r.attendance_subject || '-')}<br>📊 ${esc(value.attendance_status)}`);
+    refreshAfterChange(loadAttendanceData);
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1545,9 +1748,8 @@ async function deleteAttendance(id) {
   showLoading('กำลังลบ...');
   try {
     await callApi('deleteAttendance', { id, expect: `${rec.attendance_date}|${rec.attendance_student_id}|${rec.attendance_subject}` });
-    await loadAllDataFromSheet();
-    loadAttendanceData();
-    Swal.fire('สำเร็จ', 'ลบแล้ว', 'success');
+    notifySuccess('🗑️ ลบรายการเช็คชื่อแล้ว', `📅 ${fmtThaiDate(rec.attendance_date)} · 📚 ${esc(rec.attendance_subject || '-')}`);
+    refreshAfterChange(loadAttendanceData);
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
@@ -1594,121 +1796,244 @@ function getDateRange() {
   }
 }
 
-function loadStatistics() {
-  const cls = normalizeClass(document.getElementById('stats-class').value);
-  const subject = document.getElementById('stats-subject').value;
+/* ────────────────────────────────────────────────
+   สถิติ: สร้างข้อมูลชุดเดียว ใช้ทั้งแสดงผลและส่งออกไฟล์
+   ──────────────────────────────────────────────── */
+let statsMode = 'overview';   // 'overview' | 'student'
+let lastStatsReport = null;
+
+function setStatsMode(mode) {
+  statsMode = mode === 'student' ? 'student' : 'overview';
+  const active = 'btn bg-red-600 text-white';
+  const idle = 'btn bg-white text-gray-700 border border-gray-200';
+  const tabOverview = document.getElementById('stats-tab-overview');
+  const tabStudent = document.getElementById('stats-tab-student');
+  if (tabOverview) tabOverview.className = statsMode === 'overview' ? active : idle;
+  if (tabStudent) tabStudent.className = statsMode === 'student' ? active : idle;
+  document.getElementById('stats-student-wrap')?.classList.toggle('hidden', statsMode !== 'student');
+  if (statsMode === 'student') updateStatsStudentDropdown();
+  loadStatistics();
+}
+
+function updateStatsStudentDropdown() {
+  const sel = document.getElementById('stats-student');
+  if (!sel) return;
+  const cur = sel.value;
+  const cls = normalizeClass(document.getElementById('stats-class')?.value);
+  let list = allData.students.slice();
+  if (cls) list = list.filter(s => normalizeClass(s.student_class) === cls);
+  list.sort((a, b) =>
+    normalizeClass(a.student_class).localeCompare(normalizeClass(b.student_class), 'th') ||
+    String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }));
+
+  sel.innerHTML = '<option value="">— เลือกนักเรียน —</option>';
+  list.forEach(s => {
+    const o = document.createElement('option');
+    o.value = normalizeClass(s.student_class) + '|' + String(s.student_id);
+    o.textContent = `${s.student_class} · ${s.student_id}. ${s.student_name}`;
+    sel.appendChild(o);
+  });
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+
+function statusTally(recs) {
+  const h = { มา: 0, สาย: 0, ลา: 0, ขาด: 0, total: recs.length };
+  recs.forEach(r => { if (h[r.attendance_status] !== undefined) h[r.attendance_status]++; });
+  h.rate = h.total ? ((h.มา + h.สาย) / h.total) * 100 : 0;
+  return h;
+}
+
+function groupBySubject(recs) {
+  const map = new Map();
+  recs.forEach(r => {
+    const key = r.attendance_subject || '(ไม่ระบุวิชา)';
+    let v = map.get(key);
+    if (!v) { v = { name: key, total: 0, มา: 0, สาย: 0, ลา: 0, ขาด: 0 }; map.set(key, v); }
+    v.total++;
+    if (v[r.attendance_status] !== undefined) v[r.attendance_status]++;
+  });
+  return [...map.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'th'));
+}
+
+function pctText(part, total) {
+  return total ? ((part / total) * 100).toFixed(1) + '%' : '0.0%';
+}
+
+function statsRangeText(rep) {
+  return rep.range ? `${fmtThaiDate(rep.range.start)} - ${fmtThaiDate(rep.range.end)}` : 'ทั้งหมด';
+}
+
+function buildStatsReport() {
+  const clsEl = document.getElementById('stats-class');
+  const cls = normalizeClass(clsEl?.value || '');
+  const clsLabel = (clsEl && clsEl.value) ? clsEl.value : 'ทุกชั้น';
+  const subject = document.getElementById('stats-subject')?.value || '';
+  const periodEl = document.getElementById('stats-period');
+  const periodLabel = (periodEl?.selectedOptions?.[0]?.textContent || 'ทั้งหมด').trim();
   const range = getDateRange();
-  const c = document.getElementById('statistics-content');
 
   let students = allData.students.slice();
   if (cls) students = students.filter(s => normalizeClass(s.student_class) === cls);
 
-  let attendance = allData.attendance.slice();
-  if (range) attendance = attendance.filter(r => r.attendance_date >= range.start && r.attendance_date <= range.end);
-  if (cls) attendance = attendance.filter(r => attendanceMatchesClass(r, cls));
-  if (subject) attendance = attendance.filter(r => r.attendance_subject === subject);
+  const attendance = allData.attendance.filter(r => {
+    if (range && (r.attendance_date < range.start || r.attendance_date > range.end)) return false;
+    if (cls && !attendanceMatchesClass(r, cls)) return false;
+    if (subject && r.attendance_subject !== subject) return false;
+    return true;
+  });
 
-  // แสดงตัวกรองที่ใช้งานอยู่เหนือผลลัพธ์
-  const filterChips = [
-    cls ? `🎓 ${esc(document.getElementById('stats-class').value)}` : '🎓 ทุกชั้น',
-    subject ? `📚 ${esc(subject)}` : '📚 ทุกวิชา',
-    `📅 ${(document.getElementById('stats-period').selectedOptions[0] || {}).textContent || ''}`
-  ];
-
-  const totalRec = attendance.length;
-  const summary = {
-    มา: attendance.filter(r => r.attendance_status === 'มา').length,
-    สาย: attendance.filter(r => r.attendance_status === 'สาย').length,
-    ลา: attendance.filter(r => r.attendance_status === 'ลา').length,
-    ขาด: attendance.filter(r => r.attendance_status === 'ขาด').length
+  const summary = statusTally(attendance);
+  const rep = {
+    mode: statsMode, cls, clsLabel, subject, periodLabel, range,
+    students, attendance, summary,
+    totalRec: attendance.length,
+    rate: summary.rate,
+    days: new Set(attendance.map(r => r.attendance_date)).size,
+    generatedAt: new Date()
   };
-  const rate = totalRec ? (((summary.มา + summary.สาย) / totalRec) * 100).toFixed(1) : '0.0';
-  const days = [...new Set(attendance.map(r => r.attendance_date))].length;
 
-  let html = `
+  if (statsMode === 'student') {
+    const value = document.getElementById('stats-student')?.value || '';
+    const cut = value.indexOf('|');
+    const selCls = cut >= 0 ? value.slice(0, cut) : '';
+    const selId = cut >= 0 ? value.slice(cut + 1) : '';
+    const student = value
+      ? (allData.students.find(s => String(s.student_id) === selId && normalizeClass(s.student_class) === normalizeClass(selCls)) || null)
+      : null;
+    rep.student = student;
+    if (student) {
+      const recs = allData.attendance.filter(r => {
+        if (String(r.attendance_student_id) !== String(student.student_id)) return false;
+        if (!attendanceMatchesClass(r, student.student_class)) return false;
+        if (range && (r.attendance_date < range.start || r.attendance_date > range.end)) return false;
+        if (subject && r.attendance_subject !== subject) return false;
+        return true;
+      });
+      recs.sort((a, b) =>
+        (b.attendance_date || '').localeCompare(a.attendance_date || '') ||
+        String(a.attendance_subject || '').localeCompare(String(b.attendance_subject || ''), 'th'));
+      rep.studentRecords = recs;
+      rep.studentSummary = statusTally(recs);
+      rep.studentBySubject = groupBySubject(recs);
+      rep.studentDays = new Set(recs.map(r => r.attendance_date)).size;
+    }
+  } else {
+    rep.bySubject = groupBySubject(attendance);
+    const recsById = new Map();
+    attendance.forEach(r => {
+      const key = String(r.attendance_student_id);
+      let arr = recsById.get(key);
+      if (!arr) { arr = []; recsById.set(key, arr); }
+      arr.push(r);
+    });
+    rep.byStudent = students
+      .slice()
+      .sort((a, b) => String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }))
+      .map(st => Object.assign({ student: st },
+        statusTally((recsById.get(String(st.student_id)) || []).filter(r => attendanceMatchesClass(r, st.student_class)))));
+  }
+  return rep;
+}
+
+function loadStatistics() {
+  const rep = buildStatsReport();
+  lastStatsReport = rep;
+  const c = document.getElementById('statistics-content');
+  if (!c) return;
+  c.innerHTML = rep.mode === 'student' ? renderStudentStats(rep) : renderOverviewStats(rep);
+}
+
+function statsFilterChips(rep) {
+  return `
     <div class="flex flex-wrap gap-2 justify-center mb-5">
-      ${filterChips.map(t => `<span class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full font-medium">${t}</span>`).join('')}
-    </div>
+      <span class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full font-medium">🎓 ${esc(rep.clsLabel)}</span>
+      <span class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full font-medium">📚 ${rep.subject ? esc(rep.subject) : 'ทุกวิชา'}</span>
+      <span class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full font-medium">📅 ${esc(rep.periodLabel)}</span>
+      ${rep.range ? `<span class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full font-medium">🗓️ ${statsRangeText(rep)}</span>` : ''}
+    </div>`;
+}
+
+function statsStatusCards(t) {
+  const colors = { มา: 'green', สาย: 'amber', ลา: 'blue', ขาด: 'red' };
+  return `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    ${STATUS_LIST.map(s => {
+      const p = t.total ? ((t[s] / t.total) * 100) : 0;
+      return `<div class="bg-${colors[s]}-50 border border-${colors[s]}-100 p-4 rounded-2xl">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-sm font-semibold text-${colors[s]}-700">${s}</span>
+          <span class="text-2xl font-bold text-${colors[s]}-600">${t[s]}</span>
+        </div>
+        <div class="mt-2 h-2.5 bg-white rounded-full overflow-hidden border border-${colors[s]}-100">
+          <div class="h-full bg-${colors[s]}-500 rounded-full" style="width:${p.toFixed(1)}%"></div>
+        </div>
+        <div class="text-xs text-${colors[s]}-600 mt-1 text-right">${p.toFixed(1)}%</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function subjectTableHtml(rows, title) {
+  if (!rows.length) return '';
+  return `
+    <h3 class="text-lg font-bold text-gray-800 mb-3">${title}</h3>
+    <div class="table-scroll mb-6">
+      <table class="data-table">
+        <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+          <th class="px-3 py-3 text-left">รายวิชา</th>
+          <th class="px-3 py-3">รวม</th>
+          <th class="px-3 py-3">มา</th>
+          <th class="px-3 py-3">สาย</th>
+          <th class="px-3 py-3">ลา</th>
+          <th class="px-3 py-3">ขาด</th>
+          <th class="px-3 py-3">% มา</th>
+        </tr></thead>
+        <tbody>
+        ${rows.map(v => {
+          const rr = v.total ? (((v.มา + v.สาย) / v.total) * 100) : 0;
+          const col = rr >= 90 ? 'text-green-600' : rr >= 75 ? 'text-amber-600' : 'text-red-600';
+          return `<tr class="hover:bg-red-50">
+            <td class="px-3 py-2.5 border-b border-gray-100">${esc(v.name)}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center font-semibold">${v.total}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600">${v.มา}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600">${v.สาย}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600">${v.ลา}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600">${v.ขาด}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold ${col}">${rr.toFixed(1)}%</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderOverviewStats(rep) {
+  const rate = rep.rate.toFixed(1);
+  let html = statsFilterChips(rep) + `
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
       <div class="rounded-2xl p-4 text-center bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md">
-        <div class="text-3xl font-bold">${students.length}</div>
+        <div class="text-3xl font-bold">${rep.students.length}</div>
         <div class="text-sm text-blue-50 font-medium">👨‍🎓 นักเรียน</div></div>
       <div class="rounded-2xl p-4 text-center bg-gradient-to-br from-purple-500 to-fuchsia-600 text-white shadow-md">
-        <div class="text-3xl font-bold">${totalRec}</div>
+        <div class="text-3xl font-bold">${rep.totalRec}</div>
         <div class="text-sm text-purple-50 font-medium">📝 การเช็คชื่อ</div></div>
       <div class="rounded-2xl p-4 text-center bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-md">
-        <div class="text-3xl font-bold">${days}</div>
+        <div class="text-3xl font-bold">${rep.days}</div>
         <div class="text-sm text-amber-50 font-medium">📅 วัน</div></div>
       <div class="rounded-2xl p-4 text-center bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md">
         <div class="text-3xl font-bold">${rate}%</div>
         <div class="text-sm text-emerald-50 font-medium">✅ อัตราการมา</div></div>
     </div>`;
 
-  if (!totalRec) {
-    html += `<div class="text-center py-10 bg-gradient-to-b from-amber-50 to-white rounded-2xl border border-amber-100"><div class="text-6xl mb-3">🗓️</div><p class="text-amber-700 font-semibold">ยังไม่มีข้อมูลการเช็คชื่อในช่วงนี้</p><p class="text-xs text-amber-600 mt-1">ลองเปลี่ยนชั้นเรียน รายวิชา หรือช่วงเวลา</p></div>`;
-    c.innerHTML = html; return;
+  if (!rep.totalRec) {
+    return html + `<div class="text-center py-10 bg-gradient-to-b from-amber-50 to-white rounded-2xl border border-amber-100"><div class="text-6xl mb-3">🗓️</div><p class="text-amber-700 font-semibold">ยังไม่มีข้อมูลการเช็คชื่อในช่วงนี้</p><p class="text-xs text-amber-600 mt-1">ลองเปลี่ยนชั้นเรียน รายวิชา หรือช่วงเวลา</p></div>`;
   }
 
-  html += `
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-      ${STATUS_LIST.map(s => {
-        const colors = { มา:'green', สาย:'amber', ลา:'blue', ขาด:'red' };
-        const pct = totalRec ? ((summary[s] / totalRec) * 100) : 0;
-        return `<div class="bg-${colors[s]}-50 border border-${colors[s]}-100 p-4 rounded-2xl">
-          <div class="flex items-baseline justify-between gap-2">
-            <span class="text-sm font-semibold text-${colors[s]}-700">${s}</span>
-            <span class="text-2xl font-bold text-${colors[s]}-600">${summary[s]}</span>
-          </div>
-          <div class="mt-2 h-2.5 bg-white rounded-full overflow-hidden border border-${colors[s]}-100">
-            <div class="h-full bg-${colors[s]}-500 rounded-full" style="width:${pct.toFixed(1)}%"></div>
-          </div>
-          <div class="text-xs text-${colors[s]}-600 mt-1 text-right">${pct.toFixed(1)}%</div>
-        </div>`;
-      }).join('')}
-    </div>`;
+  html += statsStatusCards(rep.summary);
 
-  // ── สรุปรายวิชา (เมื่อยังไม่ได้เลือกวิชาเจาะจง) ──
-  if (!subject) {
-    const bySubject = {};
-    attendance.forEach(r => {
-      const key = r.attendance_subject || '(ไม่ระบุวิชา)';
-      if (!bySubject[key]) bySubject[key] = { total: 0, มา: 0, สาย: 0, ลา: 0, ขาด: 0 };
-      bySubject[key].total++;
-      if (bySubject[key][r.attendance_status] !== undefined) bySubject[key][r.attendance_status]++;
-    });
-    const subjectRows = Object.entries(bySubject).sort((a, b) => b[1].total - a[1].total);
-    html += `
-      <h3 class="text-lg font-bold text-gray-800 mb-3">📚 สรุปตามรายวิชา</h3>
-      <div class="table-scroll mb-6">
-        <table class="data-table">
-          <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
-            <th class="px-3 py-3 text-left">รายวิชา</th>
-            <th class="px-3 py-3">รวม</th>
-            <th class="px-3 py-3">มา</th>
-            <th class="px-3 py-3">สาย</th>
-            <th class="px-3 py-3">ลา</th>
-            <th class="px-3 py-3">ขาด</th>
-            <th class="px-3 py-3">% มา</th>
-          </tr></thead>
-          <tbody>
-          ${subjectRows.map(([name, v]) => {
-            const rr = v.total ? (((v.มา + v.สาย) / v.total) * 100) : 0;
-            const col = rr >= 90 ? 'text-green-600' : rr >= 75 ? 'text-amber-600' : 'text-red-600';
-            return `<tr class="hover:bg-red-50">
-              <td class="px-3 py-2.5 border-b border-gray-100">${esc(name)}</td>
-              <td class="px-3 py-2.5 border-b border-gray-100 text-center font-semibold">${v.total}</td>
-              <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600">${v.มา}</td>
-              <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600">${v.สาย}</td>
-              <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600">${v.ลา}</td>
-              <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600">${v.ขาด}</td>
-              <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold ${col}">${rr.toFixed(1)}%</td>
-            </tr>`;
-          }).join('')}
-          </tbody>
-        </table>
-      </div>`;
+  if (!rep.subject) {
+    html += subjectTableHtml(rep.bySubject, '📚 สรุปตามรายวิชา');
   } else {
-    html += `<div class="mb-5 inline-flex items-center gap-2 bg-red-50 border border-red-100 text-red-700 px-4 py-2 rounded-full font-semibold text-sm">📚 รายวิชา: ${esc(subject)}</div>`;
+    html += `<div class="mb-5 inline-flex items-center gap-2 bg-red-50 border border-red-100 text-red-700 px-4 py-2 rounded-full font-semibold text-sm">📚 รายวิชา: ${esc(rep.subject)}</div>`;
   }
 
   html += `
@@ -1726,36 +2051,309 @@ function loadStatistics() {
           <th class="px-3 py-3">รวม</th>
           <th class="px-3 py-3">%</th>
         </tr></thead>
-        <tbody>`;
+        <tbody>
+        ${rep.byStudent.map(row => {
+          const st = row.student;
+          const r = row.rate.toFixed(1);
+          const col = row.rate >= 90 ? 'text-green-600' : row.rate >= 75 ? 'text-yellow-600' : 'text-red-600';
+          return `<tr class="hover:bg-red-50">
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center font-semibold">${esc(st.student_id)}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100">${esc(st.student_name)}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(st.student_class)}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${row.มา}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${row.สาย}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${row.ลา}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${row.ขาด}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${row.total}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold ${col}">${r}%</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  return html;
+}
 
-  students.sort((a, b) => String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }));
-  students.forEach(st => {
-    const recs = attendance.filter(r =>
-      String(r.attendance_student_id) === String(st.student_id) && attendanceMatchesClass(r, st.student_class)
-    );
-    const h = {
-      มา: recs.filter(r => r.attendance_status === 'มา').length,
-      สาย: recs.filter(r => r.attendance_status === 'สาย').length,
-      ลา: recs.filter(r => r.attendance_status === 'ลา').length,
-      ขาด: recs.filter(r => r.attendance_status === 'ขาด').length
-    };
-    const tot = h.มา + h.สาย + h.ลา + h.ขาด;
-    const r = tot ? (((h.มา + h.สาย) / tot) * 100).toFixed(1) : '0.0';
-    const col = +r >= 90 ? 'text-green-600' : +r >= 75 ? 'text-yellow-600' : 'text-red-600';
-    html += `<tr class="hover:bg-red-50">
-      <td class="px-3 py-2.5 border-b border-gray-100 text-center font-semibold">${esc(st.student_id)}</td>
-      <td class="px-3 py-2.5 border-b border-gray-100">${esc(st.student_name)}</td>
-      <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(st.student_class)}</td>
-      <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${h.มา}</td>
-      <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${h.สาย}</td>
-      <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${h.ลา}</td>
-      <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${h.ขาด}</td>
-      <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${tot}</td>
-      <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold ${col}">${r}%</td>
-    </tr>`;
+function renderStudentStats(rep) {
+  const chips = statsFilterChips(rep);
+
+  if (!rep.student) {
+    return chips + `<div class="text-center py-10 bg-gradient-to-b from-rose-50 to-white rounded-2xl border border-rose-100">
+      <div class="text-6xl mb-3">👤</div>
+      <p class="text-rose-700 font-semibold">กรุณาเลือกนักเรียนที่ช่อง “👤 เลือกนักเรียน” ด้านบน</p>
+      <p class="text-xs text-rose-600 mt-1">ระบบจะแสดงสรุปรายวิชาและประวัติการเช็คชื่อของนักเรียนคนนั้น</p></div>`;
+  }
+
+  const st = rep.student;
+  const s = rep.studentSummary;
+  const recs = rep.studentRecords;
+
+  let html = chips + `
+    <div class="rounded-2xl p-5 mb-5 bg-gradient-to-r from-red-600 to-rose-500 text-white shadow-md">
+      <div class="text-xs text-rose-100 font-medium">👤 สถิติรายบุคคล</div>
+      <div class="text-2xl font-bold mt-1">${esc(st.student_name)}</div>
+      <div class="text-sm text-rose-100 mt-1">เลขที่ ${esc(st.student_id)} · ชั้น ${esc(st.student_class)}</div>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div class="rounded-2xl p-4 text-center bg-gradient-to-br from-purple-500 to-fuchsia-600 text-white shadow-md">
+        <div class="text-3xl font-bold">${s.total}</div>
+        <div class="text-sm text-purple-50 font-medium">📝 ครั้งที่เช็คชื่อ</div></div>
+      <div class="rounded-2xl p-4 text-center bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-md">
+        <div class="text-3xl font-bold">${rep.studentDays}</div>
+        <div class="text-sm text-amber-50 font-medium">📅 วันที่มาเรียน</div></div>
+      <div class="rounded-2xl p-4 text-center bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md">
+        <div class="text-3xl font-bold">${s.rate.toFixed(1)}%</div>
+        <div class="text-sm text-emerald-50 font-medium">✅ อัตราการมา</div></div>
+      <div class="rounded-2xl p-4 text-center bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-md">
+        <div class="text-3xl font-bold">${s.ขาด}</div>
+        <div class="text-sm text-rose-50 font-medium">❌ ขาดเรียน</div></div>
+    </div>`;
+
+  if (!recs.length) {
+    return html + `<div class="text-center py-10 bg-gradient-to-b from-amber-50 to-white rounded-2xl border border-amber-100"><div class="text-6xl mb-3">🗓️</div><p class="text-amber-700 font-semibold">ไม่พบข้อมูลการเช็คชื่อของนักเรียนคนนี้ตามตัวกรองที่เลือก</p><p class="text-xs text-amber-600 mt-1">ลองเปลี่ยนรายวิชาหรือช่วงเวลา</p></div>`;
+  }
+
+  html += statsStatusCards(s);
+  html += subjectTableHtml(rep.studentBySubject, '📚 สรุปตามรายวิชา');
+
+  const icons = { มา: '✅', สาย: '⏰', ลา: '📝', ขาด: '❌' };
+  const statusClass = { มา: 'bg-green-100 text-green-800', สาย: 'bg-yellow-100 text-yellow-800', ลา: 'bg-blue-100 text-blue-800', ขาด: 'bg-red-100 text-red-800' };
+  const shown = recs.slice(0, 300);
+
+  html += `
+    <h3 class="text-lg font-bold text-gray-800 mb-3">🗂️ ประวัติการเช็คชื่อ</h3>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+          <th class="px-3 py-3">วันที่</th>
+          <th class="px-3 py-3 text-left">รายวิชา</th>
+          <th class="px-3 py-3">สถานะ</th>
+          <th class="px-3 py-3 text-left">หมายเหตุ</th>
+        </tr></thead>
+        <tbody>
+        ${shown.map(r => `<tr class="hover:bg-red-50">
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">${fmtThaiDate(r.attendance_date)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100">${esc(r.attendance_subject || '-')}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">
+            <span class="px-2 py-1 rounded-full text-xs ${statusClass[r.attendance_status] || ''}">${icons[r.attendance_status] || ''} ${esc(r.attendance_status)}</span>
+          </td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-xs">${esc(r.attendance_notes || '-')}</td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${recs.length > shown.length ? `<p class="text-xs text-gray-500 mt-2">แสดง ${shown.length} จาก ${recs.length} รายการ — ไฟล์ที่ส่งออกมีข้อมูลครบทั้งหมด</p>` : ''}`;
+  return html;
+}
+
+/* ────────────────────────────────────────────────
+   ส่งออกไฟล์ (.xlsx / .docx)
+   ──────────────────────────────────────────────── */
+const scriptLoadCache = {};
+function loadScriptOnce(src, globalName) {
+  if (window[globalName]) return Promise.resolve();
+  if (scriptLoadCache[src]) return scriptLoadCache[src];
+  scriptLoadCache[src] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = true;
+    s.onload = () => (window[globalName] ? resolve() : reject(new Error('โหลดไลบรารีไม่สำเร็จ')));
+    s.onerror = () => { delete scriptLoadCache[src]; reject(new Error('โหลดไลบรารีสร้างไฟล์ไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ต')); };
+    document.head.appendChild(s);
   });
-  html += `</tbody></table></div>`;
-  c.innerHTML = html;
+  return scriptLoadCache[src];
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function statsFileName(rep, ext) {
+  const parts = ['สถิติการเข้าเรียน'];
+  if (rep.mode === 'student' && rep.student) {
+    parts.push('รายบุคคล', `${rep.student.student_id}_${rep.student.student_name}`);
+  } else {
+    parts.push(rep.clsLabel || 'ทุกชั้น');
+  }
+  parts.push(rep.subject || 'ทุกวิชา');
+  parts.push(rep.range ? `${rep.range.start}_ถึง_${rep.range.end}` : 'ทั้งหมด');
+  const name = parts.join('_').replace(/[\\/:*?"<>|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+  return `${name}.${ext}`;
+}
+
+function exportStats(kind) {
+  loadStatistics();                 // คำนวณใหม่ให้ตรงกับตัวกรองล่าสุด
+  const rep = lastStatsReport;
+  if (!rep) return;
+  if (rep.mode === 'student' && !rep.student) {
+    Swal.fire('แจ้งเตือน', 'กรุณาเลือกนักเรียนก่อนส่งออกไฟล์', 'warning');
+    return;
+  }
+  const hasData = rep.mode === 'student' ? (rep.studentRecords || []).length > 0 : rep.totalRec > 0;
+  if (!hasData) {
+    Swal.fire('แจ้งเตือน', 'ยังไม่มีข้อมูลการเช็คชื่อตามตัวเลือกที่กำหนด', 'warning');
+    return;
+  }
+
+  showLoading(kind === 'xlsx' ? 'กำลังสร้างไฟล์ Excel...' : 'กำลังสร้างไฟล์ Word...');
+  const run = kind === 'xlsx' ? exportXlsx(rep) : exportDocx(rep);
+  run.then(() => {
+    Swal.close();
+    notifySuccess('✅ ส่งออกไฟล์สำเร็จ', `📄 ${esc(statsFileName(rep, kind))}<br><span class="text-gray-600">ไฟล์ถูกบันทึกไว้ในโฟลเดอร์ Downloads</span>`);
+  }).catch(err => {
+    Swal.fire('ผิดพลาด', err.message || 'สร้างไฟล์ไม่สำเร็จ', 'error');
+  });
+}
+
+async function exportXlsx(rep) {
+  await loadScriptOnce('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', 'XLSX');
+  const wb = XLSX.utils.book_new();
+  const meta = [
+    ['รายงานสถิติการเข้าเรียน'],
+    ['โรงเรียนบ้านหนองขุย (นาคสวัสดิ์ประชานุเคราะห์)'],
+    ['ชั้นเรียน', rep.clsLabel, 'รายวิชา', rep.subject || 'ทุกวิชา'],
+    ['ช่วงเวลา', rep.periodLabel, 'ช่วงวันที่', statsRangeText(rep)],
+    ['สร้างเมื่อ', rep.generatedAt.toLocaleString('th-TH')],
+    []
+  ];
+  const addSheet = (name, aoa, widths) => {
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = (widths || [24, 26, 14, 14, 14, 14, 14]).map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  };
+  const statusBlock = t => ([
+    ['สถานะ', 'จำนวน', 'เปอร์เซ็นต์'],
+    ['มา', t.มา, pctText(t.มา, t.total)],
+    ['สาย', t.สาย, pctText(t.สาย, t.total)],
+    ['ลา', t.ลา, pctText(t.ลา, t.total)],
+    ['ขาด', t.ขาด, pctText(t.ขาด, t.total)],
+    ['รวม', t.total, '100%']
+  ]);
+
+  if (rep.mode === 'student' && rep.student) {
+    const s = rep.studentSummary;
+    addSheet('สรุป', meta.concat([
+      ['นักเรียน', `${rep.student.student_id}. ${rep.student.student_name}`, 'ชั้น', rep.student.student_class],
+      [],
+      ['จำนวนครั้งที่เช็คชื่อ', s.total, 'จำนวนวัน', rep.studentDays, 'อัตราการมา', s.rate.toFixed(1) + '%'],
+      []
+    ], statusBlock(s)));
+    addSheet('รายวิชา', [
+      ['รายวิชา', 'รวม', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+      ...rep.studentBySubject.map(v => [v.name, v.total, v.มา, v.สาย, v.ลา, v.ขาด, pctText(v.มา + v.สาย, v.total)])
+    ], [32, 10, 10, 10, 10, 10, 10]);
+    addSheet('รายละเอียด', [
+      ['วันที่', 'รายวิชา', 'สถานะ', 'หมายเหตุ'],
+      ...rep.studentRecords.map(r => [fmtThaiDate(r.attendance_date), r.attendance_subject || '-', r.attendance_status, r.attendance_notes || ''])
+    ], [16, 30, 12, 40]);
+  } else {
+    addSheet('สรุป', meta.concat([
+      ['นักเรียน (คน)', rep.students.length, 'รายการเช็คชื่อ', rep.totalRec, 'จำนวนวัน', rep.days, 'อัตราการมา', rep.rate.toFixed(1) + '%'],
+      []
+    ], statusBlock(rep.summary)));
+    addSheet('รายวิชา', [
+      ['รายวิชา', 'รวม', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+      ...rep.bySubject.map(v => [v.name, v.total, v.มา, v.สาย, v.ลา, v.ขาด, pctText(v.มา + v.สาย, v.total)])
+    ], [32, 10, 10, 10, 10, 10, 10]);
+    addSheet('รายบุคคล', [
+      ['เลขที่', 'ชื่อ-สกุล', 'ชั้น', 'มา', 'สาย', 'ลา', 'ขาด', 'รวม', '% มา'],
+      ...rep.byStudent.map(row => [row.student.student_id, row.student.student_name, row.student.student_class,
+        row.มา, row.สาย, row.ลา, row.ขาด, row.total, row.rate.toFixed(1) + '%'])
+    ], [10, 32, 10, 8, 8, 8, 8, 10, 10]);
+  }
+
+  XLSX.writeFile(wb, statsFileName(rep, 'xlsx'));
+}
+
+async function exportDocx(rep) {
+  await loadScriptOnce('https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js', 'docx');
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType } = docx;
+
+  const para = (text, opts = {}) => new Paragraph({
+    alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+    spacing: { after: opts.after ?? 80 },
+    children: [new TextRun({ text: String(text ?? ''), bold: !!opts.bold, size: opts.size || 22, color: opts.color })]
+  });
+
+  const cell = (text, opts = {}) => new TableCell({
+    width: { size: opts.width || 20, type: WidthType.PERCENTAGE },
+    shading: opts.head ? { fill: 'E11D48' } : undefined,
+    margins: { top: 40, bottom: 40, left: 80, right: 80 },
+    children: [new Paragraph({
+      alignment: opts.left ? AlignmentType.LEFT : AlignmentType.CENTER,
+      children: [new TextRun({ text: String(text ?? ''), bold: !!opts.head || !!opts.bold, size: 18, color: opts.head ? 'FFFFFF' : undefined })]
+    })]
+  });
+
+  const table = (headers, rows, widths) => new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ tableHeader: true, children: headers.map((h, i) => cell(h, { head: true, width: widths[i], left: i === 1 })) }),
+      ...rows.map(r => new TableRow({ children: r.map((v, i) => cell(v, { width: widths[i], left: i === 1 })) }))
+    ]
+  });
+
+  const children = [
+    para('รายงานสถิติการเข้าเรียน', { center: true, bold: true, size: 34, after: 60 }),
+    para('โรงเรียนบ้านหนองขุย (นาคสวัสดิ์ประชานุเคราะห์)', { center: true, color: '6B7280', after: 200 }),
+    para(`ชั้นเรียน: ${rep.clsLabel}    รายวิชา: ${rep.subject || 'ทุกวิชา'}`, { bold: true }),
+    para(`ช่วงเวลา: ${rep.periodLabel}    ช่วงวันที่: ${statsRangeText(rep)}`),
+    para(`สร้างเมื่อ: ${rep.generatedAt.toLocaleString('th-TH')}`, { color: '6B7280', after: 240 })
+  ];
+
+  if (rep.mode === 'student' && rep.student) {
+    const s = rep.studentSummary;
+    children.push(para(`นักเรียน: ${rep.student.student_id}. ${rep.student.student_name} (${rep.student.student_class})`, { bold: true, size: 26 }));
+    children.push(para('สรุปภาพรวม', { bold: true, after: 120 }));
+    children.push(table(['รายการ', 'ค่า'], [
+      ['จำนวนครั้งที่เช็คชื่อ', s.total],
+      ['จำนวนวันที่มีข้อมูล', rep.studentDays],
+      ['มา / สาย / ลา / ขาด', `${s.มา} / ${s.สาย} / ${s.ลา} / ${s.ขาด}`],
+      ['อัตราการมา', s.rate.toFixed(1) + '%']
+    ], [50, 50]));
+    if (rep.studentBySubject.length) {
+      children.push(para('สรุปตามรายวิชา', { bold: true, after: 120 }));
+      children.push(table(['รายวิชา', 'รวม', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+        rep.studentBySubject.map(v => [v.name, v.total, v.มา, v.สาย, v.ลา, v.ขาด, pctText(v.มา + v.สาย, v.total)]),
+        [33, 11, 11, 11, 11, 11, 12]));
+    }
+    children.push(para('ประวัติการเช็คชื่อ', { bold: true, after: 120 }));
+    children.push(table(['วันที่', 'รายวิชา', 'สถานะ', 'หมายเหตุ'],
+      rep.studentRecords.map(r => [fmtThaiDate(r.attendance_date), r.attendance_subject || '-', r.attendance_status, r.attendance_notes || '-']),
+      [22, 30, 14, 34]));
+  } else {
+    children.push(para('สรุปภาพรวม', { bold: true, after: 120 }));
+    children.push(table(['รายการ', 'ค่า'], [
+      ['จำนวนนักเรียน', rep.students.length],
+      ['จำนวนรายการเช็คชื่อ', rep.totalRec],
+      ['จำนวนวัน', rep.days],
+      ['มา / สาย / ลา / ขาด', `${rep.summary.มา} / ${rep.summary.สาย} / ${rep.summary.ลา} / ${rep.summary.ขาด}`],
+      ['อัตราการมา', rep.rate.toFixed(1) + '%']
+    ], [50, 50]));
+    children.push(para('สรุปตามรายวิชา', { bold: true, after: 120 }));
+    children.push(table(['รายวิชา', 'รวม', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+      rep.bySubject.map(v => [v.name, v.total, v.มา, v.สาย, v.ลา, v.ขาด, pctText(v.มา + v.สาย, v.total)]),
+      [33, 11, 11, 11, 11, 11, 12]));
+    children.push(para('รายละเอียดรายคน', { bold: true, after: 120 }));
+    children.push(table(['เลขที่', 'ชื่อ-สกุล', 'ชั้น', 'มา', 'สาย', 'ลา', 'ขาด', 'รวม', '%'],
+      rep.byStudent.map(row => [row.student.student_id, row.student.student_name, row.student.student_class,
+        row.มา, row.สาย, row.ลา, row.ขาด, row.total, row.rate.toFixed(1)]),
+      [9, 31, 10, 8, 8, 8, 8, 8, 10]));
+  }
+
+  const doc = new Document({
+    styles: { default: { document: { run: { font: 'Sarabun', size: 22 } } } },
+    sections: [{ properties: {}, children }]
+  });
+  const blob = await Packer.toBlob(doc);
+  downloadBlob(blob, statsFileName(rep, 'docx'));
 }
 
 /* ==================================================
@@ -1796,8 +2394,8 @@ async function updateSheetIdFromAdmin() {
   showLoading('กำลังบันทึก Sheet ID...');
   try {
     await callApi('updateSheetId', { sheetId });
-    Swal.fire('สำเร็จ', 'อัปเดต Sheet ID แล้ว', 'success');
-    await loadAllDataFromSheet();
+    notifySuccess('✅ บันทึก Sheet ID สำเร็จ', `<span style="word-break:break-all">${esc(sheetId)}</span>`);
+    await loadAllDataFromSheet(false, true);
     loadAdminInfo();
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
@@ -1863,12 +2461,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!refreshed) return;
       const activePage = document.querySelector('.page:not(.hidden)')?.id;
       if (activePage === 'checkin-page') {
-        // Keep unsaved status/notes selections intact until the teacher saves.
-        if (attendanceFormDirty) return;
-        const date = document.getElementById('attendance-date')?.value;
-        const cls = document.getElementById('attendance-class')?.value;
-        const subject = document.getElementById('attendance-subject')?.value;
-        if (date && cls && subject) loadStudentsForAttendance();
+        // ไม่วาดรายชื่อใหม่เอง เพราะจะทำให้ชิปสถานะที่เพิ่งบันทึก/ล้างแล้วกลับมาติดอีกครั้ง
+        // ต้องการข้อมูลล่าสุดให้กด “🔍 โหลดรายชื่อ” เอง (ค่าเริ่มต้นของหน้าจอคือช่องว่าง)
+        return;
       } else if (activePage === 'statistics-page') {
         loadStatistics();
       } else if (activePage === 'manage-data-page') {

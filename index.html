@@ -208,7 +208,7 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
       <div>
         <label class="block text-sm font-semibold mb-2">📅 วันที่</label>
-        <input type="date" id="attendance-date" class="field">
+        <input type="date" id="attendance-date" class="field" onchange="onCheckinContextChange()">
       </div>
       <div>
         <label class="block text-sm font-semibold mb-2">🎓 ชั้นเรียน</label>
@@ -218,6 +218,7 @@
         <label class="block text-sm font-semibold mb-2">⏱ ช่วงเวลา</label>
         <select id="attendance-period" class="field" onchange="onPeriodChange()"></select>
         <p id="attendance-period-hint" class="text-xs text-gray-500 mt-1"></p>
+        <p id="attendance-lock-note" class="text-xs mt-1"></p>
       </div>
       <div>
         <label class="block text-sm font-semibold mb-2">📚 วิชา / กิจกรรม</label>
@@ -243,25 +244,27 @@
 <div id="statistics-page" class="page hidden">
   <div class="text-center mb-6">
     <h2 class="text-2xl sm:text-3xl font-bold text-gray-800">📊 สถิติการเข้าเรียน</h2>
-    <p class="text-gray-500 text-sm sm:text-base mt-1">ดูได้ทั้ง <b>ภาพรวมทั้งชั้น</b> และ <b>รายบุคคล</b> · ส่งออกเป็น Excel / Word ได้</p>
+    <p class="text-gray-500 text-sm sm:text-base mt-1">ดูได้ทั้ง <b>ภาพรวม</b> · <b>รายห้องเรียนตามช่วงเวลาเช็คชื่อ</b> · <b>ทั้งโรงเรียน</b> และ <b>รายบุคคล</b> · ส่งออกเป็น Excel / Word ได้</p>
   </div>
 
   <div class="flex flex-wrap justify-center gap-2 mb-5">
     <button id="stats-tab-overview" onclick="setStatsMode('overview')" class="btn bg-red-600 text-white">📊 ภาพรวม</button>
+    <button id="stats-tab-classroom" onclick="setStatsMode('classroom')" class="btn bg-white text-gray-700 border border-gray-200">🏫 รายห้องเรียน</button>
+    <button id="stats-tab-school" onclick="setStatsMode('school')" class="btn bg-white text-gray-700 border border-gray-200">🏢 ทั้งโรงเรียน</button>
     <button id="stats-tab-student" onclick="setStatsMode('student')" class="btn bg-white text-gray-700 border border-gray-200">👤 รายบุคคล</button>
   </div>
 
   <div class="card p-5 sm:p-6 mb-6">
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div>
+      <div id="stats-class-wrap">
         <label class="block text-sm font-semibold mb-2 text-gray-700">🎓 ชั้นเรียน</label>
-        <select id="stats-class" class="field" onchange="updateStatsSubjectDropdown(); updateStatsStudentDropdown()"></select>
+        <select id="stats-class" class="field" onchange="onStatsClassChange()"></select>
       </div>
-      <div>
+      <div id="stats-subject-wrap">
         <label class="block text-sm font-semibold mb-2 text-gray-700">📚 รายวิชา</label>
         <select id="stats-subject" class="field"></select>
       </div>
-      <div>
+      <div id="stats-range-wrap">
         <label class="block text-sm font-semibold mb-2 text-gray-700">📅 ช่วงเวลา</label>
         <select id="stats-period" class="field" onchange="toggleCustomDate()">
           <option value="all">🗓️ ทั้งหมด</option>
@@ -271,6 +274,10 @@
           <option value="this-month">เดือนนี้</option>
           <option value="custom">✏️ กำหนดเอง</option>
         </select>
+      </div>
+      <div id="stats-day-wrap" class="hidden">
+        <label class="block text-sm font-semibold mb-2 text-gray-700">📅 วันที่เช็คชื่อ</label>
+        <input type="date" id="stats-day" class="field" onchange="loadStatistics()">
       </div>
       <div class="flex items-end">
         <button onclick="loadStatistics()" class="btn bg-red-600 hover:bg-red-700 text-white w-full">📈 โหลดสถิติ</button>
@@ -289,7 +296,7 @@
       </div>
     </div>
 
-    <div class="mt-4 flex flex-wrap gap-2">
+    <div id="stats-export-wrap" class="mt-4 flex flex-wrap gap-2">
       <button onclick="exportStats('xlsx')" class="btn bg-emerald-600 hover:bg-emerald-700 text-white">📊 ส่งออก Excel (.xlsx)</button>
       <button onclick="exportStats('docx')" class="btn bg-blue-600 hover:bg-blue-700 text-white">📄 ส่งออก Word (.docx)</button>
     </div>
@@ -901,7 +908,10 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
   const el = document.getElementById(id + '-page');
   if (el) el.classList.remove('hidden');
-  if (id === 'checkin' && !document.getElementById('attendance-period')?.value) autoSelectPeriod();
+  if (id === 'checkin') {
+    if (!document.getElementById('attendance-period')?.value) autoSelectPeriod();
+    else refreshPeriodLocks();
+  }
   if (id === 'manage-data') showManageMode('students');
   if (id === 'admin') { loadAdminInfo(); renderAnalyticsConsent(); }
   trackEvent('screen_viewed', { screen: id });
@@ -1014,15 +1024,129 @@ function getSelectedPeriod() {
   return sel ? findPeriod(sel.value) : null;
 }
 
+/* ---------- ล็อกช่วงเวลาที่เช็คชื่อแล้ว ----------
+   กติกา: 1 ช่วงเวลา ของ 1 ห้อง ใน 1 วัน เช็คชื่อได้เพียงวิชาเดียว
+   - วิชาเดิมเลือกซ้ำได้ในอีกช่วงเวลา (เช่น ภาษาไทยทั้งช่วงเช้าและช่วงบ่าย)
+   - ช่วงที่บันทึกไว้ไม่ครบทุกคน ยังกลับมาเช็คต่อด้วยวิชาเดิมได้
+   - ช่วงที่เช็คครบทุกคนแล้ว แก้ไขได้เมื่อเข้าสู่ระบบเท่านั้น */
+function checkinDateValue() {
+  return document.getElementById('attendance-date')?.value || '';
+}
+
+function checkinClassValue() {
+  return normalizeClass(document.getElementById('attendance-class')?.value || '');
+}
+
+function classSize(cls) {
+  if (!cls) return 0;
+  return allData.students.filter(s => normalizeClass(s.student_class) === cls).length;
+}
+
+// period → { subjects:Set, students:Set, size, complete }
+function periodUsage(date, cls) {
+  const usage = new Map();
+  if (!date || !cls) return usage;
+  const size = classSize(cls);
+  for (const r of allData.attendance) {
+    const period = r.attendance_period || '';
+    if (!period || r.attendance_date !== date) continue;
+    if (!recordClasses(r).includes(cls)) continue;
+    let entry = usage.get(period);
+    if (!entry) { entry = { subjects: new Set(), students: new Set(), size, complete: false }; usage.set(period, entry); }
+    if (r.attendance_subject) entry.subjects.add(r.attendance_subject);
+    entry.students.add(String(r.attendance_student_id));
+  }
+  usage.forEach(e => { e.complete = e.size > 0 && e.students.size >= e.size; });
+  return usage;
+}
+
+// เหตุผลที่ห้ามเช็คชื่อด้วยวิชานี้ในช่วงเวลานี้ (null = เช็คได้)
+function periodLockReason(usage, period, subject) {
+  const entry = usage.get(period);
+  if (!entry) return null;
+  const others = [...entry.subjects].filter(s => s !== subject);
+  if (others.length) {
+    return 'ช่วงเวลานี้ถูกเช็คชื่อด้วยวิชา “' + others.join(', ') + '” ไปแล้ว — 1 ช่วงเวลาเช็คชื่อได้เพียงวิชาเดียว';
+  }
+  if (entry.complete && !authToken) {
+    return 'ช่วงเวลานี้เช็คชื่อครบ ' + entry.students.size + '/' + entry.size + ' คนแล้ว — ต้องเข้าสู่ระบบเพื่อแก้ไข';
+  }
+  return null;
+}
+
+// วิชาเดียวกันที่เคยเช็คในช่วงเวลาอื่นของวันนี้ → Map(วิชา → [ช่วงเวลา])
+function subjectUsageByOtherPeriods(cls, currentPeriod, date = checkinDateValue()) {
+  const map = new Map();
+  periodUsage(date, cls).forEach((entry, period) => {
+    if (period === currentPeriod) return;
+    entry.subjects.forEach(subject => {
+      if (!map.has(subject)) map.set(subject, []);
+      map.get(subject).push(period);
+    });
+  });
+  return map;
+}
+
+// ช่วงเวลาถัดไปที่ยังไม่มีการเช็คชื่อ (ไล่วนจากช่วงที่ระบุ)
+function nextFreePeriod(usage, fromTime) {
+  const start = Math.max(PERIOD_DEFS.findIndex(p => p.time === fromTime), 0);
+  const order = PERIOD_DEFS.slice(start + 1).concat(PERIOD_DEFS.slice(0, start + 1));
+  const free = order.find(p => !usage.has(p.time));
+  return free ? free.time : '';
+}
+
+// สร้างตัวเลือกช่วงเวลาใหม่ พร้อมติด 🔒 ช่วงที่เช็คชื่อแล้วของวัน/ชั้นที่เลือก
+function fillCheckinPeriodSelect() {
+  const sel = document.getElementById('attendance-period');
+  if (!sel) return;
+  const usage = periodUsage(checkinDateValue(), checkinClassValue());
+  const options = PERIOD_DEFS.map(p => {
+    const entry = usage.get(p.time);
+    const lock = entry
+      ? ' 🔒 เช็คแล้ว ' + [...entry.subjects].join(', ') + ' (' + entry.students.size + '/' + entry.size + ')'
+      : '';
+    return '<option value="' + esc(p.time) + '">' + esc(p.time + ' · ' + p.activity + lock) + '</option>';
+  }).join('');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">เลือกช่วงเวลา</option>' + options;
+  if (cur && findPeriod(cur)) sel.value = cur;
+}
+
+// รีเฟรชสถานะล็อก (เรียกเมื่อเปลี่ยนวันที่/ชั้น หรือหลังบันทึก)
+function refreshPeriodLocks(opts = {}) {
+  const sel = document.getElementById('attendance-period');
+  if (!sel) return;
+  const prev = sel.value;
+  fillCheckinPeriodSelect();
+  if (opts.autoAdvance && prev && periodUsage(checkinDateValue(), checkinClassValue()).has(prev)) {
+    sel.value = nextFreePeriod(periodUsage(checkinDateValue(), checkinClassValue()), prev) || '';
+  } else if (prev && findPeriod(prev)) {
+    sel.value = prev;
+  } else if (prev) {
+    sel.value = '';
+  }
+  updatePeriodHint();
+  updateSubjectDropdown();
+}
+
+function onCheckinContextChange() {
+  refreshPeriodLocks({ autoAdvance: true });
+}
+
+// เปิดหน้าสถิติแบบรายห้องเรียนของวัน/ชั้นนั้น เพื่อดูว่าช่วงเวลาที่ล็อกบันทึกอะไรไว้
+function openPeriodRecords(cls, date) {
+  const dayEl = document.getElementById('stats-day');
+  const classEl = document.getElementById('stats-class');
+  if (dayEl) dayEl.value = date;
+  if (classEl) classEl.value = cls;
+  showPage('statistics');
+  setStatsMode('classroom');
+}
+
 function fillPeriodSelect() {
   const options = PERIOD_DEFS.map(p => `<option value="${esc(p.time)}">${esc(p.time)} · ${esc(p.activity)}</option>`).join('');
 
-  const sel = document.getElementById('attendance-period');
-  if (sel) {
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">เลือกช่วงเวลา</option>' + options;
-    if (cur && findPeriod(cur)) sel.value = cur;
-  }
+  fillCheckinPeriodSelect();
 
   const filter = document.getElementById('filter-period');
   if (filter && filter.options.length <= 1) {
@@ -1053,7 +1177,10 @@ function currentPeriodTime(now = new Date()) {
 function autoSelectPeriod(notify = false) {
   const sel = document.getElementById('attendance-period');
   if (!sel) return;
-  const time = currentPeriodTime();
+  fillCheckinPeriodSelect();
+  const usage = periodUsage(checkinDateValue(), checkinClassValue());
+  let time = currentPeriodTime();
+  if (usage.has(time)) time = nextFreePeriod(usage, time) || currentPeriodTime();
   sel.value = time;
   onPeriodChange();
   if (notify) {
@@ -1080,7 +1207,20 @@ function updatePeriodHint() {
   if (subHint) {
     subHint.textContent = !p ? ''
       : p.kind === 'activity' ? 'กิจกรรมประจำช่วงเวลานี้ (ระบบเลือกให้อัตโนมัติ)'
-      : 'เลือกวิชาตามตารางสอนของช่วงเวลานี้';
+      : 'เลือกวิชาตามตารางสอน · วิชาเดิมเลือกซ้ำได้ในอีกช่วง แต่ช่วงเวลาเดิมเช็คได้ครั้งเดียว';
+  }
+  const note = document.getElementById('attendance-lock-note');
+  if (!note) return;
+  const usage = periodUsage(checkinDateValue(), checkinClassValue());
+  if (!usage.size) { note.className = 'text-xs mt-1'; note.textContent = ''; return; }
+  const entry = p ? usage.get(p.time) : null;
+  if (entry) {
+    note.className = 'text-xs mt-1 font-semibold text-red-600';
+    note.textContent = '🔒 ช่วงนี้เช็คชื่อแล้ว: ' + [...entry.subjects].join(', ') +
+      ' · ' + entry.students.size + '/' + entry.size + ' คน' + (entry.complete ? ' (ครบแล้ว)' : '');
+  } else {
+    note.className = 'text-xs mt-1 text-gray-500';
+    note.textContent = 'ช่วงที่เช็คแล้วของวันนี้: ' + [...usage.keys()].join(', ');
   }
 }
 
@@ -1100,6 +1240,8 @@ function initAllClassSelects() {
     fillClassSelect(document.getElementById(id), { all: true }));
   fillClassSelect(document.getElementById('attendance-class'));
   fillClassSelect(document.getElementById('stats-class'), { all: true });
+  const statsDay = document.getElementById('stats-day');
+  if (statsDay) statsDay.value = todayThaiStr();
   fillPeriodSelect();
   updateStatsSubjectDropdown();
   updateStatsStudentDropdown();
@@ -1133,9 +1275,12 @@ function updateSubjectDropdown() {
     o.textContent = `(ไม่มีวิชาสำหรับชั้นนี้)`; o.disabled = true; sel.appendChild(o);
     return;
   }
+  const usedElsewhere = subjectUsageByOtherPeriods(cls, period ? period.time : '');
   subs.forEach(s => {
     const o = document.createElement('option');
-    o.value = o.textContent = s.subject_name;
+    o.value = s.subject_name;
+    const used = usedElsewhere.get(s.subject_name);
+    o.textContent = used ? s.subject_name + ' · เคยเช็ค ' + used.join(', ') : s.subject_name;
     sel.appendChild(o);
   });
   if ([...sel.options].some(option => option.value === currentSubject)) sel.value = currentSubject;
@@ -1165,7 +1310,7 @@ function updateStatsSubjectDropdown() {
    ================================================== */
 function refreshUI() {
   renderDashboard();
-  updateSubjectDropdown();
+  refreshPeriodLocks(); // อัปเดต 🔒 ของช่วงเวลาที่เช็คชื่อแล้วหลังโหลดข้อมูลใหม่
   updateStatsSubjectDropdown();
   updateStatsStudentDropdown();
 }
@@ -1221,6 +1366,21 @@ async function loadStudentsForAttendance() {
 
   if (!date || !cls || !period || !subject) {
     Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่ ชั้นเรียน ช่วงเวลา และวิชา/กิจกรรม', 'warning'); return;
+  }
+
+  // ล็อกช่วงเวลาที่เช็คชื่อแล้ว: 1 ช่วงเวลาเช็คได้เพียงวิชาเดียว (วิชาเดิมใช้ซ้ำได้ในอีกช่วง)
+  const lockReason = periodLockReason(periodUsage(date, cls), period, subject);
+  if (lockReason) {
+    const answer = await Swal.fire({
+      icon: 'warning',
+      title: 'ช่วงเวลานี้ล็อกอยู่',
+      html: `<div style="text-align:left;font-size:.95rem;line-height:1.8">${esc(lockReason)}<br>
+        <span class="text-gray-600">วิชาเดียวกันเลือกซ้ำได้ในอีกช่วงเวลา แต่ช่วงเวลาเดิมเช็คชื่อได้ครั้งเดียว</span></div>`,
+      showCancelButton: true, confirmButtonText: 'ดูรายการที่เช็คแล้ว', cancelButtonText: 'ปิด',
+      confirmButtonColor: '#2563eb'
+    });
+    if (answer.isConfirmed) openPeriodRecords(cls, date);
+    return;
   }
 
   const list = document.getElementById('student-list');
@@ -1420,6 +1580,18 @@ async function saveAttendance() {
     Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่ ชั้นเรียน ช่วงเวลา และวิชา/กิจกรรม', 'warning'); return;
   }
 
+  // ห้ามบันทึกซ้ำช่วงเวลาเดิมด้วยวิชาอื่น (เช่น เปิดหน้าค้างไว้แล้วสอนเลยไปช่วงถัดไป)
+  const lockReason = periodLockReason(periodUsage(date, cls), period, subject);
+  if (lockReason) {
+    Swal.fire({
+      icon: 'warning', title: 'ช่วงเวลานี้ล็อกอยู่',
+      html: `<div style="text-align:left;font-size:.95rem;line-height:1.8">${esc(lockReason)}<br>
+        <span class="text-gray-600">กด “🔍 โหลดรายชื่อ” ใหม่เพื่อดูสถานะล่าสุดของช่วงเวลานี้</span></div>`,
+      confirmButtonColor: '#dc2626'
+    });
+    return;
+  }
+
   // อ่านจากแถวที่แสดงอยู่จริง (เร็วกว่าวนหา allData + querySelector ต่อคน)
   const rows = [...document.querySelectorAll('#student-list .att-row')];
   if (!rows.length) { Swal.fire('แจ้งเตือน', 'ยังไม่มีรายชื่อนักเรียน', 'warning'); return; }
@@ -1566,6 +1738,7 @@ async function saveAttendance() {
       confirmButtonColor: '#dc2626'
     });
 
+    refreshPeriodLocks(); // ช่วงที่เพิ่งบันทึกจะขึ้น 🔒 ทันที
     loadAllDataFromSheet(); // ซิงก์เบื้องหลัง (ไม่บังคับอ่านใหม่) เพื่อให้ได้ _id จริงของรายการใหม่
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
@@ -2072,17 +2245,32 @@ function getDateRange() {
 let statsMode = 'overview';   // 'overview' | 'student'
 let lastStatsReport = null;
 
+const STATS_MODES = ['overview', 'classroom', 'school', 'student'];
+
 function setStatsMode(mode) {
-  statsMode = mode === 'student' ? 'student' : 'overview';
+  statsMode = STATS_MODES.includes(mode) ? mode : 'overview';
   const active = 'btn bg-red-600 text-white';
   const idle = 'btn bg-white text-gray-700 border border-gray-200';
-  const tabOverview = document.getElementById('stats-tab-overview');
-  const tabStudent = document.getElementById('stats-tab-student');
-  if (tabOverview) tabOverview.className = statsMode === 'overview' ? active : idle;
-  if (tabStudent) tabStudent.className = statsMode === 'student' ? active : idle;
+  STATS_MODES.forEach(m => {
+    const tab = document.getElementById('stats-tab-' + m);
+    if (tab) tab.className = statsMode === m ? active : idle;
+  });
+  const dayMode = statsMode === 'classroom' || statsMode === 'school';
   document.getElementById('stats-student-wrap')?.classList.toggle('hidden', statsMode !== 'student');
+  document.getElementById('stats-day-wrap')?.classList.toggle('hidden', !dayMode);
+  document.getElementById('stats-range-wrap')?.classList.toggle('hidden', dayMode);
+  document.getElementById('stats-class-wrap')?.classList.toggle('hidden', statsMode === 'school');
+  document.getElementById('stats-subject-wrap')?.classList.toggle('hidden', dayMode);
+  document.getElementById('stats-export-wrap')?.classList.toggle('hidden', dayMode);
+  if (dayMode) statsDayValue();
   if (statsMode === 'student') updateStatsStudentDropdown();
   loadStatistics();
+}
+
+function onStatsClassChange() {
+  updateStatsSubjectDropdown();
+  updateStatsStudentDropdown();
+  if (statsMode === 'classroom') loadStatistics();
 }
 
 function updateStatsStudentDropdown() {
@@ -2205,10 +2393,292 @@ function buildStatsReport() {
   return rep;
 }
 
+/* ────────────────────────────────────────────────
+   สถิติตามช่วงเวลาเช็คชื่อ: รายห้องเรียน + ทั้งโรงเรียน
+   ──────────────────────────────────────────────── */
+function statsDayValue() {
+  const el = document.getElementById('stats-day');
+  if (!el) return todayThaiStr();
+  if (!el.value) el.value = todayThaiStr();
+  return el.value;
+}
+
+function statsMetricCard(value, label, gradient) {
+  return `<div class="rounded-2xl p-4 text-center bg-gradient-to-br ${gradient} text-white shadow-md">
+    <div class="text-3xl font-bold">${value}</div>
+    <div class="text-sm text-white/80 font-medium">${label}</div>
+  </div>`;
+}
+
+function statsDayChips(rep) {
+  const chips = [];
+  if (rep.clsLabel) chips.push(`🎓 ${esc(rep.clsLabel)}`);
+  chips.push(`📅 ${esc(fmtThaiDate(rep.day))}`);
+  return `<div class="flex flex-wrap gap-2 justify-center mb-5">
+    ${chips.map(c => `<span class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full font-medium">${c}</span>`).join('')}
+  </div>`;
+}
+
+function statsLegacyNote(count) {
+  if (!count) return '';
+  return `<div class="mb-5 flex items-start gap-2 bg-amber-50 border border-amber-100 text-amber-800 text-sm px-4 py-3 rounded-2xl">
+    <span>⚠️</span>
+    <span>มี <b>${count}</b> รายการของวันนี้ที่บันทึกไว้ก่อนมีระบบช่วงเวลา (ไม่มีข้อมูลช่วงเวลา) — ไม่ถูกนับในตารางด้านล่าง</span>
+  </div>`;
+}
+
+// ---- 1) รายห้องเรียน: ตารางช่วงเวลาเช็คชื่อประจำวันของห้องที่เลือก ----
+function buildClassTimetableReport() {
+  const clsEl = document.getElementById('stats-class');
+  const cls = normalizeClass(clsEl?.value || '');
+  const day = statsDayValue();
+
+  const students = cls ? allData.students.filter(s => normalizeClass(s.student_class) === cls) : [];
+  const dayRecords = cls
+    ? allData.attendance.filter(r => r.attendance_date === day && attendanceMatchesClass(r, cls))
+    : [];
+  const timed = dayRecords.filter(r => r.attendance_period);
+  const legacy = dayRecords.filter(r => !r.attendance_period);
+
+  const periods = PERIOD_DEFS.map(p => {
+    const recs = timed.filter(r => r.attendance_period === p.time);
+    const ids = new Set(recs.map(r => String(r.attendance_student_id)));
+    const subjects = [...new Set(recs.map(r => r.attendance_subject).filter(Boolean))];
+    const state = !recs.length ? 'none' : (students.length && ids.size >= students.length ? 'full' : 'partial');
+    return {
+      time: p.time,
+      kind: p.kind,
+      label: p.kind === 'activity' ? p.activity : (subjects.length ? subjects.join(', ') : 'วิชาตามตารางสอน'),
+      subjects,
+      tally: statusTally(recs),
+      checkedStudents: ids.size,
+      classStudents: students.length,
+      state
+    };
+  });
+
+  return {
+    mode: 'classroom',
+    cls,
+    clsLabel: clsEl && clsEl.value ? clsEl.value : '',
+    day,
+    students,
+    periods,
+    summary: statusTally(timed),
+    totalRec: timed.length,
+    checkedPeriods: periods.filter(p => p.state !== 'none').length,
+    totalPeriods: periods.length,
+    legacyCount: legacy.length
+  };
+}
+
+function renderClassTimetable(rep) {
+  const chips = statsDayChips(rep);
+
+  if (!rep.cls) {
+    return chips + `<div class="text-center py-10 bg-gradient-to-b from-rose-50 to-white rounded-2xl border border-rose-100">
+      <div class="text-6xl mb-3">🏫</div>
+      <p class="text-rose-700 font-semibold">กรุณาเลือกชั้นเรียนที่ช่อง “🎓 ชั้นเรียน” ด้านบน</p>
+      <p class="text-xs text-rose-600 mt-1">ระบบจะแสดงตารางช่วงเวลาเช็คชื่อประจำวันของห้องนั้นครบทุกช่วง</p></div>`;
+  }
+
+  const s = rep.summary;
+  let html = chips + `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    ${statsMetricCard(rep.checkedPeriods + '/' + rep.totalPeriods, '⏱ ช่วงที่เช็คแล้ว', 'from-blue-500 to-indigo-600')}
+    ${statsMetricCard(rep.students.length, '👨‍🎓 นักเรียนในห้อง', 'from-purple-500 to-fuchsia-600')}
+    ${statsMetricCard(rep.totalRec, '📝 รายการเช็คชื่อ', 'from-amber-400 to-orange-500')}
+    ${statsMetricCard(s.rate.toFixed(1) + '%', '✅ อัตราการมา', 'from-emerald-500 to-teal-600')}
+  </div>` + statsLegacyNote(rep.legacyCount);
+
+  html += `<h3 class="text-lg font-bold text-gray-800 mb-3">🗓️ ตารางช่วงเวลาเช็คชื่อประจำวัน — ${esc(fmtThaiDate(rep.day))}</h3>
+  <div class="table-scroll mb-4">
+    <table class="data-table" style="min-width:900px">
+      <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+        <th class="px-3 py-3 text-left">ช่วงเวลา</th>
+        <th class="px-3 py-3 text-left">กิจกรรม / รายวิชา</th>
+        <th class="px-3 py-3">มา</th>
+        <th class="px-3 py-3">สาย</th>
+        <th class="px-3 py-3">ลา</th>
+        <th class="px-3 py-3">ขาด</th>
+        <th class="px-3 py-3">รวม</th>
+        <th class="px-3 py-3">นักเรียน</th>
+        <th class="px-3 py-3">สถานะ</th>
+      </tr></thead>
+      <tbody>
+      ${rep.periods.map(p => {
+        const t = p.tally;
+        const none = p.state === 'none';
+        const badge = none ? 'bg-red-100 text-red-700' : p.state === 'full' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800';
+        const badgeText = none ? '❌ ยังไม่เช็คชื่อ' : p.state === 'full' ? '✅ เช็คครบ' : '⚠️ บางส่วน';
+        return `<tr class="${none ? 'bg-red-50/60' : 'hover:bg-red-50'}">
+          <td class="px-3 py-2.5 border-b border-gray-100 font-semibold whitespace-nowrap">${esc(p.time)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 ${p.kind === 'activity' ? 'font-semibold' : ''}">${esc(p.label)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${t.มา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${t.สาย}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${t.ลา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${t.ขาด}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${t.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">${p.checkedStudents}/${p.classStudents || 0}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">
+            <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${badgeText}</span>
+          </td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-gray-500">💡 “นักเรียน” = จำนวนนักเรียนที่ถูกเช็คชื่อในช่วงนั้น / นักเรียนทั้งหมดของห้อง · ช่วงที่ยังไม่เช็คชื่อจะแสดงเป็นสีแดง</p>`;
+
+  if (!rep.totalRec && !rep.legacyCount) {
+    html += `<div class="mt-5 text-center py-8 bg-gradient-to-b from-amber-50 to-white rounded-2xl border border-amber-100">
+      <div class="text-5xl mb-2">🗓️</div>
+      <p class="text-amber-700 font-semibold">ห้องนี้ยังไม่มีการเช็คชื่อในวันที่ ${esc(fmtThaiDate(rep.day))} เลย</p>
+    </div>`;
+  }
+  return html;
+}
+
+// ---- 2) ทั้งโรงเรียน: ชั้นไหนยังไม่เช็คช่วงเวลาใดเลย ----
+function buildSchoolDayReport() {
+  const day = statsDayValue();
+  const dayRecords = allData.attendance.filter(r => r.attendance_date === day);
+  const timed = dayRecords.filter(r => r.attendance_period);
+  const legacy = dayRecords.filter(r => !r.attendance_period);
+
+  const rows = ALL_CLASSES.map(cls => {
+    const target = normalizeClass(cls);
+    const clsStudents = allData.students.filter(s => normalizeClass(s.student_class) === target);
+    const clsRecs = timed.filter(r => attendanceMatchesClass(r, cls));
+    const cells = PERIOD_DEFS.map(p => {
+      const recs = clsRecs.filter(r => r.attendance_period === p.time);
+      const ids = new Set(recs.map(r => String(r.attendance_student_id)));
+      return { time: p.time, activity: p.activity, kind: p.kind, count: recs.length, students: ids.size, classStudents: clsStudents.length };
+    });
+    return {
+      cls,
+      students: clsStudents.length,
+      cells,
+      totalRec: clsRecs.length,
+      checkedPeriods: cells.filter(c => c.count > 0).length,
+      legacyCount: legacy.filter(r => attendanceMatchesClass(r, cls)).length
+    };
+  });
+
+  const periodSummary = PERIOD_DEFS.map((p, i) => ({
+    time: p.time,
+    activity: p.activity,
+    kind: p.kind,
+    classesChecked: rows.filter(r => r.cells[i].count > 0).length,
+    missingClasses: rows.filter(r => !r.cells[i].count).map(r => r.cls)
+  }));
+
+  return {
+    mode: 'school',
+    day,
+    rows,
+    periodSummary,
+    legacyCount: legacy.length,
+    totalRec: timed.length,
+    totalClasses: rows.length,
+    noCheckinClasses: rows.filter(r => r.totalRec === 0 && r.legacyCount === 0).map(r => r.cls),
+    legacyOnlyClasses: rows.filter(r => r.totalRec === 0 && r.legacyCount > 0).map(r => r.cls),
+    fullClasses: rows.filter(r => r.checkedPeriods === rows[0]?.cells.length).map(r => r.cls),
+    idlePeriods: periodSummary.filter(p => p.classesChecked === 0)
+  };
+}
+
+function renderSchoolDay(rep) {
+  const chips = statsDayChips(rep);
+  const totalPeriods = rep.periodSummary.length;
+  const notChecked = rep.noCheckinClasses.length;
+
+  let html = chips + `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    ${statsMetricCard(notChecked + '/' + rep.totalClasses, '❌ ชั้นที่ยังไม่เช็คเลย', 'from-rose-500 to-red-600')}
+    ${statsMetricCard((rep.totalClasses - notChecked) + '/' + rep.totalClasses, '✅ ชั้นที่เช็คแล้ว', 'from-emerald-500 to-teal-600')}
+    ${statsMetricCard(rep.idlePeriods.length + '/' + totalPeriods, '⏱ ช่วงที่ไม่มีใครเช็ค', 'from-amber-400 to-orange-500')}
+    ${statsMetricCard(rep.totalRec, '📝 รายการเช็คชื่อ', 'from-blue-500 to-indigo-600')}
+  </div>` + statsLegacyNote(rep.legacyCount);
+
+  if (notChecked) {
+    html += `<div class="mb-5 bg-red-50 border border-red-200 rounded-2xl p-4">
+      <div class="font-bold text-red-700 mb-2">❌ ชั้นที่ยังไม่มีการเช็คชื่อเลยในวันที่ ${esc(fmtThaiDate(rep.day))}</div>
+      <div class="flex flex-wrap gap-2">
+        ${rep.noCheckinClasses.map(c => `<span class="bg-white border border-red-200 text-red-700 font-semibold text-sm px-3 py-1.5 rounded-full">${esc(c)}</span>`).join('')}
+      </div>
+    </div>`;
+  } else {
+    html += `<div class="mb-5 bg-green-50 border border-green-200 rounded-2xl p-4">
+      <div class="font-bold text-green-700">✅ ทุกชั้นมีการเช็คชื่ออย่างน้อย 1 ช่วงเวลาในวันนี้</div>
+    </div>`;
+  }
+
+  if (rep.legacyOnlyClasses.length) {
+    html += `<div class="mb-5 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+      <div class="font-bold text-amber-800 mb-1">⚠️ ชั้นที่มีแต่รายการแบบไม่ระบุช่วงเวลา</div>
+      <div class="text-sm text-amber-800">${rep.legacyOnlyClasses.map(esc).join(' · ')} — มีการเช็คชื่อแต่บันทึกไว้ก่อนมีระบบช่วงเวลา จึงยังไม่นับว่าเช็คช่วงเวลาใด</div>
+    </div>`;
+  }
+
+  if (rep.idlePeriods.length) {
+    html += `<div class="mb-5 bg-orange-50 border border-orange-200 rounded-2xl p-4">
+      <div class="font-bold text-orange-800 mb-2">⏱ ช่วงเวลาที่ไม่มีชั้นไหนเช็คชื่อเลย</div>
+      <div class="flex flex-wrap gap-2">
+        ${rep.idlePeriods.map(p => `<span class="bg-white border border-orange-200 text-orange-800 font-semibold text-sm px-3 py-1.5 rounded-full">${esc(p.time)} · ${esc(p.activity)}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  html += `<h3 class="text-lg font-bold text-gray-800 mb-3">🏢 ตารางการเช็คชื่อทั้งโรงเรียน — ${esc(fmtThaiDate(rep.day))}</h3>
+  <div class="table-scroll mb-4">
+    <table class="data-table" style="min-width:980px">
+      <thead>
+        <tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+          <th class="px-3 py-3 text-left sticky left-0 bg-red-600">ชั้น</th>
+          ${rep.periodSummary.map(p => `<th class="px-2 py-2 text-center text-xs leading-tight" title="${esc(p.time)} · ${esc(p.activity)}">${esc(p.time.slice(0, 5))}</th>`).join('')}
+          <th class="px-3 py-3">ยังไม่เช็ค</th>
+        </tr>
+        <tr class="bg-red-500/90 text-white text-xs">
+          <th class="px-3 py-1 text-left sticky left-0 bg-red-500/90">นักเรียน</th>
+          ${rep.periodSummary.map(p => `<th class="px-2 py-1 text-center font-normal">${p.classesChecked}/${rep.totalClasses}</th>`).join('')}
+          <th class="px-3 py-1"></th>
+        </tr>
+      </thead>
+      <tbody>
+      ${rep.rows.map(row => {
+        const none = row.totalRec === 0;
+        return `<tr class="${none ? 'bg-red-50/60' : 'hover:bg-red-50'}">
+          <td class="px-3 py-2.5 border-b border-gray-100 font-bold whitespace-nowrap sticky left-0 bg-white ${none ? 'bg-red-50/60' : ''}">
+            ${esc(row.cls)}<span class="text-xs font-normal text-gray-500"> (${row.students})</span>
+          </td>
+          ${row.cells.map(c => c.count
+            ? `<td class="px-2 py-2.5 border-b border-gray-100 text-center text-green-700 font-semibold" title="${esc(row.cls)} · ${esc(c.time)}: ${c.students}/${c.classStudents} คน">✅${c.students}</td>`
+            : `<td class="px-2 py-2.5 border-b border-gray-100 text-center text-red-400" title="${esc(row.cls)} · ${esc(c.time)}: ยังไม่เช็คชื่อ">—</td>`).join('')}
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">
+            ${row.checkedPeriods === totalPeriods
+              ? '<span class="text-green-700 font-bold">ครบ</span>'
+              : `<span class="text-red-600 font-bold">${totalPeriods - row.checkedPeriods}/${totalPeriods}</span>`}
+          </td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-gray-500">💡 ช่องที่มี ✅ = จำนวนนักเรียนที่ถูกเช็คชื่อในช่วงนั้น (วางเมาส์เพื่อดูรายละเอียด) · “—” = ยังไม่เช็คชื่อ · คอลัมน์ “ยังไม่เช็ค” = จำนวนช่วงเวลาที่ยังไม่มีข้อมูล</p>`;
+
+  return html;
+}
+
 function loadStatistics() {
+  const c = document.getElementById('statistics-content');
+  if (statsMode === 'classroom' || statsMode === 'school') {
+    const rep = statsMode === 'classroom' ? buildClassTimetableReport() : buildSchoolDayReport();
+    lastStatsReport = rep;
+    if (!c) return;
+    c.innerHTML = statsMode === 'classroom' ? renderClassTimetable(rep) : renderSchoolDay(rep);
+    return;
+  }
   const rep = buildStatsReport();
   lastStatsReport = rep;
-  const c = document.getElementById('statistics-content');
   if (!c) return;
   c.innerHTML = rep.mode === 'student' ? renderStudentStats(rep) : renderOverviewStats(rep);
 }
@@ -2462,6 +2932,10 @@ function exportStats(kind) {
   loadStatistics();                 // คำนวณใหม่ให้ตรงกับตัวกรองล่าสุด
   const rep = lastStatsReport;
   if (!rep) return;
+  if (rep.mode === 'classroom' || rep.mode === 'school') {
+    Swal.fire('แจ้งเตือน', 'โหมดรายห้องเรียน/ทั้งโรงเรียนยังไม่รองรับการส่งออกไฟล์', 'info');
+    return;
+  }
   if (rep.mode === 'student' && !rep.student) {
     Swal.fire('แจ้งเตือน', 'กรุณาเลือกนักเรียนก่อนส่งออกไฟล์', 'warning');
     return;
@@ -2712,7 +3186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAnalytics();
   initAllClassSelects();
   document.getElementById('attendance-date').value = todayThaiStr();
-  document.getElementById('attendance-class').addEventListener('change', updateSubjectDropdown);
+  document.getElementById('attendance-class').addEventListener('change', onCheckinContextChange);
   autoSelectPeriod();   // เลือกช่วงเวลาตามเวลาปัจจุบันไว้ให้ก่อน (ผู้ใช้เปลี่ยนเองได้)
   const studentList = document.getElementById('student-list');
   if (studentList) {

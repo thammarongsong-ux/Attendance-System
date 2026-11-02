@@ -14,6 +14,13 @@ const AUTH_LOGIN_LOCK_SECONDS = 900;
 const CLASS_LIST = ['ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6', 'ม.1', 'ม.2', 'ม.3'];
 const ATTENDANCE_STATUS_LIST = ['มา', 'สาย', 'ลา', 'ขาด'];
 
+// ช่วงเวลาเช็คชื่อประจำวัน — ต้องตรงกับ PERIOD_DEFS ใน index.html
+const ATTENDANCE_PERIOD_LIST = ['07.30-08.10', '08.15-08.20', '08.30-09.00', '09.00-10.00',
+  '10.00-11.30', '12.30-13.00', '13.00-14.00', '14.00-15.00', '15.00-15.30'];
+// กิจกรรมประจำช่วงเวลา (ไม่ต้องมีในชีต Subjects แต่บันทึกเป็นวิชาได้)
+const ATTENDANCE_ACTIVITY_LIST = ['ปรนนิบัติสถานที่', 'สติเคารพฯ', 'MT (Mind training)',
+  'PT (Personality talk)', 'AAR'];
+
 // โครงตารางของแต่ละชีต (ใช้ตอนสร้างชีตใหม่เท่านั้น)
 const SHEET_DEFS = {
   'Students':   ['student_id', 'student_name', 'student_class', 'created_at'],
@@ -21,6 +28,19 @@ const SHEET_DEFS = {
   'Attendance': ['attendance_date', 'attendance_student_id', 'attendance_subject',
                  'attendance_status', 'attendance_notes', 'created_at']
 };
+
+// หัวตารางชีต Attendance ครบชุด = 6 คอลัมน์หลัก + ชั้นเรียน (7) + ช่วงเวลาเช็คชื่อ (8)
+function attendanceHeaders_() {
+  return SHEET_DEFS.Attendance.concat(['attendance_student_class', 'attendance_period']);
+}
+
+// เติมหัวคอลัมน์ที่ยังขาด (เช่นเพิ่ม attendance_period ให้ชีตเดิม) โดยไม่ทับข้อมูลเดิม
+function ensureHeaderTail_(sh, headers) {
+  const last = sh.getLastColumn();
+  if (last >= headers.length) return;
+  const missing = headers.slice(last);
+  sh.getRange(1, last + 1, 1, missing.length).setValues([missing]);
+}
 
 // ⚠️ รันฟังก์ชันนี้ "ครั้งเดียว" เพื่อตั้งค่าเริ่มต้น
 //    (รันซ้ำได้: จะคงค่า Sheet ID / รหัสผ่าน Admin เดิมไว้ ไม่รีเซ็ต)
@@ -63,13 +83,9 @@ function ensureSheets_() {
       const name = classSheetName_(kind, cls);
       let sh = ss.getSheetByName(name);
       if (!sh) sh = ss.insertSheet(name);
-      const headers = kind === 'Attendance'
-        ? SHEET_DEFS[kind].concat(['attendance_student_class'])
-        : SHEET_DEFS[kind];
+      const headers = kind === 'Attendance' ? attendanceHeaders_() : SHEET_DEFS[kind];
       if (sh.getLastRow() === 0) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
-      else if (kind === 'Attendance' && sh.getLastColumn() < headers.length) {
-        sh.getRange(1, headers.length).setValue(headers[headers.length - 1]);
-      }
+      else ensureHeaderTail_(sh, headers);
     });
   });
 }
@@ -595,12 +611,9 @@ function ensureClassSheet__(baseName, cls) {
   const ss = getSpreadsheet_();
   let sh = ss.getSheetByName(name);
   if (!sh) { sh = ss.insertSheet(name); SHEET_MAP_ = null; }
-  let headers = SHEET_DEFS[baseName].slice();
-  if (baseName === 'Attendance') headers.push('attendance_student_class');
+  const headers = baseName === 'Attendance' ? attendanceHeaders_() : SHEET_DEFS[baseName].slice();
   if (sh.getLastRow() === 0) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
-  else if (baseName === 'Attendance' && sh.getLastColumn() < headers.length) {
-    sh.getRange(1, headers.length).setValue(headers[headers.length - 1]);
-  }
+  else ensureHeaderTail_(sh, headers);
   return sh;
 }
 
@@ -664,7 +677,7 @@ function getAllDataByClass_() {
   });
 
   dataSheetEntries_('Attendance').forEach(function (entry) {
-    readRows_(entry.sheet, 7).forEach(function (r, i) {
+    readRows_(entry.sheet, 8).forEach(function (r, i) {
       if (!r || !r[0]) return;
       let cls = normalizeClass_(r[6] || entry.cls || '');
       if (!cls) {
@@ -679,7 +692,8 @@ function getAllDataByClass_() {
         attendance_date: normalizeDate_(r[0]), attendance_student_id: String(r[1]),
         attendance_subject: String(r[2]), attendance_status: String(r[3]),
         attendance_notes: String(r[4] || ''),
-        attendance_student_class: cls || ''
+        attendance_student_class: cls || '',
+        attendance_period: String(r[7] || '')
       });
     });
   });
@@ -692,8 +706,19 @@ function getAllDataByClass_() {
     const cls = normalizeClass_(r.attendance_student_class);
     // Keep ambiguous legacy rows distinct; their class cannot safely form a dedupe key.
     return cls
-      ? cls + '|' + r.attendance_date + '|' + r.attendance_student_id + '|' + r.attendance_subject
+      ? cls + '|' + r.attendance_date + '|' + r.attendance_student_id + '|' + r.attendance_subject + '|' + (r.attendance_period || '')
       : 'legacy|' + r._id;
+  });
+  // แถวเก่าที่ยังไม่มีช่วงเวลาและมีแถวของวัน/วิชาเดียวกันที่ระบุช่วงเวลาแล้ว → ไม่ต้องแสดงซ้ำ
+  const attendanceKeyOf = function (r) {
+    return normalizeClass_(r.attendance_student_class) + '|' + r.attendance_date + '|' +
+      r.attendance_student_id + '|' + r.attendance_subject;
+  };
+  const periodFilled = new Set(result.attendance.filter(function (r) {
+    return !!r.attendance_period;
+  }).map(attendanceKeyOf));
+  result.attendance = result.attendance.filter(function (r) {
+    return !!r.attendance_period || !periodFilled.has(attendanceKeyOf(r));
   });
   return result;
 }
@@ -863,12 +888,16 @@ function saveAttendanceByClass_(records, allowUpdates) {
       const date = record.date;
       const status = record.status;
       const notes = record.notes == null ? '' : record.notes;
+      const period = String(record.period == null ? '' : record.period).trim();
 
       if (!studentId || studentId.length > 40) throw new Error('เลขที่นักเรียนไม่ถูกต้อง');
       if (!subject || subject.length > 120) throw new Error('รายวิชาไม่ถูกต้อง');
+      if (period && ATTENDANCE_PERIOD_LIST.indexOf(period) === -1) throw new Error('ช่วงเวลาเช็คชื่อไม่ถูกต้อง');
       if (!cls) {
+        const isActivity = ATTENDANCE_ACTIVITY_LIST.indexOf(subject) !== -1;
         const possibleClasses = data.students.filter(function (student) {
-          return String(student.student_id) === studentId && subjects.has(attendanceKey_(student.student_class, '', '', subject));
+          return String(student.student_id) === studentId &&
+            (isActivity || subjects.has(attendanceKey_(student.student_class, '', '', subject)));
         }).map(function (student) { return normalizeClass_(student.student_class); });
         const uniqueClasses = Array.from(new Set(possibleClasses));
         if (uniqueClasses.length !== 1) throw new Error('ไม่สามารถระบุชั้นเรียนจากข้อมูลนักเรียนและวิชาได้');
@@ -881,15 +910,23 @@ function saveAttendanceByClass_(records, allowUpdates) {
         throw new Error('หมายเหตุไม่ถูกต้องหรือยาวเกิน 200 ตัวอักษร');
       }
       if (!students.has(attendanceKey_(cls, '', studentId, ''))) throw new Error('ไม่พบนักเรียนในชั้นที่ระบุ');
-      if (!subjects.has(attendanceKey_(cls, '', '', subject))) throw new Error('รายวิชาไม่ตรงกับชั้นเรียนที่ระบุ');
+      // วิชาตามตารางสอนต้องมีในชีต Subjects; กิจกรรมประจำช่วงเวลาบันทึกได้โดยไม่ต้องมีในตารางสอน
+      if (!subjects.has(attendanceKey_(cls, '', '', subject)) && ATTENDANCE_ACTIVITY_LIST.indexOf(subject) === -1) {
+        throw new Error('รายวิชาไม่ตรงกับชั้นเรียนที่ระบุ');
+      }
 
-      const key = attendanceKey_(cls, date, studentId, subject);
+      const key = attendanceKey_(cls, date, studentId, subject) + '|' + period;
       if (seen.has(key)) throw new Error('มีรายการนักเรียนซ้ำในคำขอเดียวกัน');
       seen.add(key);
-      return { cls: cls, studentId: studentId, subject: subject, date: date, status: status, notes: notes, key: key };
+      return {
+        cls: cls, studentId: studentId, subject: subject, date: date, status: status, notes: notes,
+        period: period, key: key,
+        legacyKey: JSON.stringify([cls, normalizeDate_(date), studentId, subject])
+      };
     });
 
     const existingByKey = new Map();
+    const legacyByKey = new Map();
     const unresolvedLegacyKeys = new Set();
     data.attendance.forEach(function (row) {
       const cls = normalizeClass_(row.attendance_student_class);
@@ -899,23 +936,35 @@ function saveAttendanceByClass_(records, allowUpdates) {
         ]));
         return;
       }
-      const key = attendanceKey_(cls, row.attendance_date, row.attendance_student_id, row.attendance_subject);
+      const key = attendanceKey_(cls, row.attendance_date, row.attendance_student_id, row.attendance_subject) +
+        '|' + String(row.attendance_period || '');
       existingByKey.set(key, row);
+      // แถวที่บันทึกไว้ก่อนมีระบบช่วงเวลา (ช่องช่วงเวลาว่าง) → จับคู่ด้วย วัน/เลขที่/วิชา
+      if (!row.attendance_period) {
+        legacyByKey.set(JSON.stringify([cls, normalizeDate_(row.attendance_date),
+          String(row.attendance_student_id), String(row.attendance_subject)]), row);
+      }
     });
 
     const insertsByClass = {};
     const updates = [];
     let inserted = 0, updated = 0, skipped = 0;
     validated.forEach(function (record) {
-      const match = existingByKey.get(record.key);
+      const match = existingByKey.get(record.key) || legacyByKey.get(record.legacyKey);
       if (match) {
-        if (!allowUpdates) {
-          if (match.attendance_status !== record.status || String(match.attendance_notes || '') !== record.notes) {
+        const sameValues = match.attendance_status === record.status &&
+          String(match.attendance_notes || '') === record.notes;
+        const samePeriod = String(match.attendance_period || '') === record.period;
+        // แถวเก่าที่ยังไม่มีช่วงเวลา → เติมช่วงเวลาได้โดยไม่ต้องเข้าสู่ระบบ (ค่าเดิมไม่เปลี่ยน)
+        const periodOnlyFill = sameValues && !match.attendance_period && !!record.period;
+        if (!allowUpdates && !periodOnlyFill) {
+          if (!sameValues || !samePeriod) {
             throw new Error('รายการนี้ถูกบันทึกแล้ว หากต้องการแก้ไขสถานะ กรุณาเข้าสู่ระบบ');
           }
           skipped++;
           return;
         }
+        if (sameValues && samePeriod) { skipped++; return; }
         updates.push({ match: match, record: record });
         updated++;
       } else {
@@ -926,7 +975,7 @@ function saveAttendanceByClass_(records, allowUpdates) {
         if (!insertsByClass[record.cls]) insertsByClass[record.cls] = [];
         insertsByClass[record.cls].push([
           record.date, record.studentId, record.subject, record.status,
-          record.notes, new Date(), record.cls
+          record.notes, new Date(), record.cls, record.period
         ]);
         inserted++;
       }
@@ -938,6 +987,7 @@ function saveAttendanceByClass_(records, allowUpdates) {
     const preparedUpdates = updates.map(function (item) {
       return { loc: decodeRowId_(item.match._id, 'ATT_', 'Attendance'), item: item };
     });
+    const headerFixed = {};
     preparedUpdates.forEach(function (prepared) {
       const loc = prepared.loc;
       const item = prepared.item;
@@ -945,6 +995,13 @@ function saveAttendanceByClass_(records, allowUpdates) {
       if (!item.match.attendance_student_class) {
         if (loc.sheet.getLastColumn() < 7) loc.sheet.getRange(1, 7).setValue('attendance_student_class');
         loc.sheet.getRange(loc.row, 7).setValue(item.record.cls);
+      }
+      if (!item.match.attendance_period && item.record.period) {
+        if (!headerFixed[loc.sheetName]) {
+          headerFixed[loc.sheetName] = true;
+          if (loc.sheet.getLastColumn() < 8) loc.sheet.getRange(1, 8).setValue('attendance_period');
+        }
+        loc.sheet.getRange(loc.row, 8).setValue(item.record.period);
       }
     });
     Object.keys(insertsByClass).forEach(function (cls) {
@@ -1039,7 +1096,7 @@ function migrateExistingDataToClassTabs() {
         return;
       }
       const dest = ensureClassSheet__('Attendance', cls);
-      const dataRow = [r[0], r[1], r[2], r[3], r[4] || '', r[5] || new Date(), cls];
+      const dataRow = [r[0], r[1], r[2], r[3], r[4] || '', r[5] || new Date(), cls, String(r[7] || '')];
       if (appendUnique_(dest, dataRow, [0, 1, 2])) report.attendance++;
     });
   }

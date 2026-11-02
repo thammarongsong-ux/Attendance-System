@@ -880,6 +880,7 @@ function saveAttendanceByClass_(records, allowUpdates) {
       return attendanceKey_(subject.subject_class, '', '', subject.subject_name);
     }));
     const seen = new Set();
+    const seenPeriodSlots = new Map(); // ชั้น|วัน|ช่วงเวลา → วิชาที่เลือก
     const validated = records.map(function (record) {
       if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('รูปแบบรายการเช็คชื่อไม่ถูกต้อง');
       let cls = normalizeClass_(record.cls || '');
@@ -918,6 +919,15 @@ function saveAttendanceByClass_(records, allowUpdates) {
       const key = attendanceKey_(cls, date, studentId, subject) + '|' + period;
       if (seen.has(key)) throw new Error('มีรายการนักเรียนซ้ำในคำขอเดียวกัน');
       seen.add(key);
+      // ในคำขอเดียวกันก็ต้องเป็นวิชาเดียวต่อช่วงเวลา
+      if (period) {
+        const slot = JSON.stringify([cls, normalizeDate_(date), period]);
+        const chosen = seenPeriodSlots.get(slot);
+        if (chosen && chosen !== subject) {
+          throw new Error('ช่วงเวลา ' + period + ' ต้องเช็คด้วยวิชาเดียวกันทั้งห้อง (พบ ' + chosen + ' และ ' + subject + ')');
+        }
+        seenPeriodSlots.set(slot, subject);
+      }
       return {
         cls: cls, studentId: studentId, subject: subject, date: date, status: status, notes: notes,
         period: period, key: key,
@@ -946,10 +956,27 @@ function saveAttendanceByClass_(records, allowUpdates) {
       }
     });
 
+    // 1 ช่วงเวลา ของ 1 ห้อง ใน 1 วัน ต้องเป็นวิชาเดียวกัน
+    // (วิชาเดิมเลือกซ้ำได้ในอีกช่วงเวลา แต่ห้ามแยกวิชาในเวลาเดียวกัน แม้มาจากหลายเครื่อง)
+    const periodSubjects = new Map();
+    data.attendance.forEach(function (row) {
+      const cls = normalizeClass_(row.attendance_student_class);
+      const period = String(row.attendance_period || '');
+      if (!cls || !period || !row.attendance_subject) return;
+      const key = JSON.stringify([cls, normalizeDate_(row.attendance_date), period]);
+      if (!periodSubjects.has(key)) periodSubjects.set(key, String(row.attendance_subject));
+    });
+
     const insertsByClass = {};
     const updates = [];
     let inserted = 0, updated = 0, skipped = 0;
     validated.forEach(function (record) {
+      if (record.period) {
+        const usedSubject = periodSubjects.get(JSON.stringify([record.cls, normalizeDate_(record.date), record.period]));
+        if (usedSubject && usedSubject !== record.subject) {
+          throw new Error('ช่วงเวลา ' + record.period + ' เช็คชื่อด้วยวิชา ' + usedSubject + ' แล้ว (1 ช่วงเวลาเช็คได้เพียงวิชาเดียว)');
+        }
+      }
       const match = existingByKey.get(record.key) || legacyByKey.get(record.legacyKey);
       if (match) {
         const sameValues = match.attendance_status === record.status &&

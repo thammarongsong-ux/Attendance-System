@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ระบบเช็คชื่อนักเรียน</title>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/posthog-js@1.444.2/dist/array.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
@@ -77,7 +78,7 @@
 
   /* ─── ตาราง: เลื่อนแนวนอนบนจอเล็ก ไม่หดตัวจนอ่านไม่ออก ─── */
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .data-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: .93rem; }
+  .data-table { width: 100%; min-width: 860px; border-collapse: collapse; font-size: .93rem; }
   .table-scroll::-webkit-scrollbar { height: 8px; }
   .table-scroll::-webkit-scrollbar-thumb { background: #fda4af; border-radius: 99px; }
   .table-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
@@ -204,7 +205,7 @@
 <div id="checkin-page" class="page hidden">
   <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 text-center">📝 เช็คชื่อนักเรียน</h2>
   <div class="card p-6 mb-6">
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
       <div>
         <label class="block text-sm font-semibold mb-2">📅 วันที่</label>
         <input type="date" id="attendance-date" class="field">
@@ -214,14 +215,27 @@
         <select id="attendance-class" class="field"></select>
       </div>
       <div>
-        <label class="block text-sm font-semibold mb-2">📚 วิชา</label>
+        <label class="block text-sm font-semibold mb-2">⏱ ช่วงเวลา</label>
+        <select id="attendance-period" class="field" onchange="onPeriodChange()"></select>
+        <p id="attendance-period-hint" class="text-xs text-gray-500 mt-1"></p>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold mb-2">📚 วิชา / กิจกรรม</label>
         <select id="attendance-subject" class="field"></select>
+        <p id="attendance-subject-hint" class="text-xs text-gray-500 mt-1"></p>
       </div>
     </div>
-    <button onclick="loadStudentsForAttendance()" class="bg-red-600 hover:bg-red-700 text-white btn">🔍 โหลดรายชื่อ</button>
+    <div class="flex flex-wrap items-center gap-2">
+      <button onclick="loadStudentsForAttendance()" class="bg-red-600 hover:bg-red-700 text-white btn">🔍 โหลดรายชื่อ</button>
+      <button onclick="autoSelectPeriod(true)" class="bg-white text-gray-700 border border-gray-300 btn">⏱ ตามเวลาปัจจุบัน</button>
+    </div>
+    <details class="mt-4 bg-blue-50 border border-blue-100 rounded-2xl p-3">
+      <summary class="text-sm font-semibold text-gray-700 cursor-pointer">🗓️ ตารางช่วงเวลาเช็คชื่อประจำวัน</summary>
+      <div id="period-timetable" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700"></div>
+    </details>
   </div>
   <div id="student-list" class="card p-6">
-    <p class="text-gray-500 text-center">กรุณาเลือกวันที่ ชั้นเรียน และวิชาก่อน</p>
+    <p class="text-gray-500 text-center">กรุณาเลือกวันที่ ชั้นเรียน ช่วงเวลา และวิชา/กิจกรรมก่อน</p>
   </div>
 </div>
 
@@ -439,10 +453,12 @@
   <div id="manage-attendance-mode" class="manage-mode hidden">
     <div class="card p-6">
       <h3 class="text-xl font-semibold mb-4">✅ ข้อมูลการเช็คชื่อ</h3>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         <div><label class="block text-sm font-semibold mb-2">📅 วันที่</label><input type="date" id="filter-date" class="field"></div>
         <div><label class="block text-sm font-semibold mb-2">🎓 ชั้น</label>
           <select id="filter-class" class="field"><option value="">ทุกชั้น</option></select></div>
+        <div><label class="block text-sm font-semibold mb-2">⏱ ช่วงเวลา</label>
+          <select id="filter-period" class="field"><option value="">ทุกช่วงเวลา</option></select></div>
         <div><label class="block text-sm font-semibold mb-2">📊 สถานะ</label>
           <select id="filter-status" class="field">
             <option value="">ทั้งหมด</option><option value="มา">✅ มา</option><option value="สาย">⏰ สาย</option><option value="ลา">📝 ลา</option><option value="ขาด">❌ ขาด</option>
@@ -478,6 +494,16 @@
   </div>
 
   <div class="card p-6 max-w-xl mx-auto mt-6">
+    <h3 class="text-lg font-semibold mb-3">📊 สถิติการใช้งาน (PostHog)</h3>
+    <label class="flex items-start gap-3 text-sm">
+      <input type="checkbox" id="analytics-consent-toggle" class="mt-1" onchange="setAnalyticsConsent(this.checked)">
+      <span>อนุญาตให้เก็บสถิติการใช้งานแบบไม่ระบุตัวนักเรียน (ชั้น/วิชา/จำนวน)<br>
+        <span class="text-xs text-gray-500">ไม่เก็บชื่อ/เลขที่นักเรียน ไม่บันทึกหน้าจอ และเคารพ Do Not Track</span></span>
+    </label>
+    <p id="analytics-status" class="text-xs text-gray-500 mt-2"></p>
+  </div>
+
+  <div class="card p-6 max-w-xl mx-auto mt-6">
     <h3 class="text-lg font-semibold mb-3">🧪 ทดสอบการเชื่อมต่อ</h3>
     <button onclick="testConnection()" class="w-full bg-blue-600 hover:bg-blue-700 text-white btn">
       🔌 ทดสอบเชื่อมต่อ Web App
@@ -497,6 +523,28 @@ const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwwsLeMP1yaL6Z7OAtO
 const ALL_CLASSES = ['ป.1','ป.2','ป.3','ป.4','ป.5','ป.6','ม.1','ม.2','ม.3'];
 const STATUS_LIST = ['มา','สาย','ลา','ขาด'];
 
+// ตารางช่วงเวลาเช็คชื่อประจำวัน (ต้องตรงกับ ATTENDANCE_PERIOD_LIST ใน Cod.gs)
+// kind: 'activity' = กิจกรรมประจำช่วง (ล็อกวิชาเป็นชื่อกิจกรรม) | 'subject' = เลือกวิชาตามตารางสอน
+const PERIOD_DEFS = [
+  { time: '07.30-08.10', start: '07:30', end: '08:10', activity: 'ปรนนิบัติสถานที่',           kind: 'activity' },
+  { time: '08.15-08.20', start: '08:15', end: '08:20', activity: 'สติเคารพฯ',                   kind: 'activity' },
+  { time: '08.30-09.00', start: '08:30', end: '09:00', activity: 'MT (Mind training)',          kind: 'activity' },
+  { time: '09.00-10.00', start: '09:00', end: '10:00', activity: 'เลือกวิชา (เช้า)', kind: 'subject'  },
+  { time: '10.00-11.30', start: '10:00', end: '11:30', activity: 'เลือกวิชา (สาย)', kind: 'subject'  },
+  { time: '12.30-13.00', start: '12:30', end: '13:00', activity: 'PT (Personality talk)',       kind: 'activity' },
+  { time: '13.00-14.00', start: '13:00', end: '14:00', activity: 'เลือกวิชา (บ่าย)', kind: 'subject'  },
+  { time: '14.00-15.00', start: '14:00', end: '15:00', activity: 'เลือกวิชา (เย็น)', kind: 'subject'  },
+  { time: '15.00-15.30', start: '15:00', end: '15:30', activity: 'AAR',                         kind: 'activity' }
+];
+
+// ---- PostHog (สถิติการใช้งาน) ----
+// ใส่ Project API Key ของโปรเจกต์ PostHog (เป็น public key ฝังในหน้าเว็บได้ ไม่ใช่ความลับ)
+// คัดลอกจาก https://posthog.com → Project Settings → Project API Key (ขึ้นต้นด้วย phc_)
+const POSTHOG_API_KEY = '';
+const POSTHOG_HOST = 'https://us.i.posthog.com';
+const ANALYTICS_OPT_OUT_KEY = 'attendance-analytics-opt-out';
+let posthogReady = false;
+
 let allData = { students: [], subjects: [], attendance: [] };
 let isConnected = false;
 let isSavingAttendance = false;
@@ -508,6 +556,82 @@ let authUsername = '';
 let pendingPageId = '';
 const AUTH_TOKEN_STORAGE_KEY = 'attendance-admin-session';
 const PROTECTED_PAGES = new Set(['add-student', 'add-subject', 'manage-data', 'admin']);
+
+/* ==================================================
+   ANALYTICS (PostHog)
+   --------------------------------------------------
+   เก็บสถิติการใช้งานแบบไม่ระบุตัวนักเรียน เพื่อดูว่าเส้นทางไหนถูกใช้จริง
+   (เปิด/ปิดได้ที่หน้า Admin · เคารพ Do Not Track · ไม่บันทึกหน้าจอ · ไม่ใช้คุกกี้)
+   ================================================== */
+function analyticsAllowed() {
+  try { return localStorage.getItem(ANALYTICS_OPT_OUT_KEY) !== '1'; } catch (_) { return true; }
+}
+
+function analyticsStatusText() {
+  if (!POSTHOG_API_KEY) return 'ยังไม่ได้ใส่ Project API Key (POSTHOG_API_KEY) ใน CONFIG';
+  if (typeof posthog === 'undefined') return 'โหลด posthog-js ไม่สำเร็จ (ตรวจสอบอินเทอร์เน็ต/CDN)';
+  return analyticsAllowed() ? 'เปิดการเก็บสถิติอยู่' : 'ปิดการเก็บสถิติอยู่';
+}
+
+function initAnalytics() {
+  if (posthogReady || !POSTHOG_API_KEY) return;
+  if (typeof posthog === 'undefined' || !posthog.init) return;
+  try {
+    posthog.init(POSTHOG_API_KEY, {
+      api_host: POSTHOG_HOST,
+      persistence: 'localStorage',      // ไม่ใช้คุกกี้ เพราะหน้าเว็บรันใน iframe ของ Apps Script
+      person_profiles: 'identified_only',
+      capture_pageview: true,
+      capture_pageleave: true,
+      autocapture: false,               // ไม่เก็บอัตโนมัติจาก DOM (หน้ามีชื่อนักเรียน)
+      disable_session_recording: true,  // ไม่บันทึกหน้าจอ
+      respect_dnt: true                 // เคารพ Do Not Track ของเบราว์เซอร์
+    });
+    posthogReady = true;
+    applyAnalyticsConsent();
+  } catch (_) { posthogReady = false; }
+}
+
+function applyAnalyticsConsent() {
+  if (!posthogReady) return;
+  try {
+    if (analyticsAllowed()) posthog.opt_in_capturing();
+    else posthog.opt_out_capturing();
+  } catch (_) {}
+  renderAnalyticsConsent();
+}
+
+function setAnalyticsConsent(allowed) {
+  try {
+    if (allowed) localStorage.removeItem(ANALYTICS_OPT_OUT_KEY);
+    else localStorage.setItem(ANALYTICS_OPT_OUT_KEY, '1');
+  } catch (_) {}
+  applyAnalyticsConsent();
+}
+
+function renderAnalyticsConsent() {
+  const toggle = document.getElementById('analytics-consent-toggle');
+  if (toggle) toggle.checked = analyticsAllowed();
+  const status = document.getElementById('analytics-status');
+  if (status) status.textContent = analyticsStatusText();
+}
+
+// ส่ง event ไป PostHog (ปิดสถิติหรือยังไม่ตั้งค่า key = ไม่ส่งอะไรเลย)
+function trackEvent(event, properties) {
+  if (!posthogReady || !analyticsAllowed()) return;
+  try { posthog.capture(event, properties || {}); } catch (_) {}
+}
+
+// ผูกผู้ใช้กับ PostHog หลังเข้าสู่ระบบ → ทำ funnel/retention ต่อผู้ใช้ได้
+function identifyAnalyticsUser(username) {
+  if (!posthogReady || !analyticsAllowed() || !username) return;
+  try { posthog.identify(String(username), { role: 'teacher' }); } catch (_) {}
+}
+
+function resetAnalyticsUser() {
+  if (!posthogReady) return;
+  try { posthog.reset(); } catch (_) {}
+}
 
 /* ==================================================
    API LAYER
@@ -777,8 +901,10 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
   const el = document.getElementById(id + '-page');
   if (el) el.classList.remove('hidden');
+  if (id === 'checkin' && !document.getElementById('attendance-period')?.value) autoSelectPeriod();
   if (id === 'manage-data') showManageMode('students');
-  if (id === 'admin') loadAdminInfo();
+  if (id === 'admin') { loadAdminInfo(); renderAnalyticsConsent(); }
+  trackEvent('screen_viewed', { screen: id });
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -804,6 +930,8 @@ function setAuthSession(session) {
   const saved = { token: authToken, username: authUsername, expiresAt: Date.now() + (session.expiresIn || 21600) * 1000 };
   try { localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, JSON.stringify(saved)); } catch (_) {}
   updateAuthUI();
+  identifyAnalyticsUser(authUsername);
+  trackEvent('login_succeeded', { method: 'password' });
   if (pendingPageId) {
     const nextPage = pendingPageId;
     pendingPageId = '';
@@ -825,6 +953,7 @@ async function restoreAuthSession() {
       clearAuthSession();
       return false;
     }
+    identifyAnalyticsUser(authUsername); // ผู้ใช้เดิมที่ session ยังอยู่ → retention ต่อเนื่อง
     return true;
   } catch (_) {
     clearAuthSession();
@@ -862,6 +991,8 @@ function openLogin() {
 
 async function logout() {
   const token = authToken;
+  trackEvent('logout');
+  resetAnalyticsUser();
   clearAuthSession();
   updateAuthUI();
   document.querySelectorAll('.page').forEach(page => page.classList.add('hidden'));
@@ -873,6 +1004,86 @@ async function logout() {
 /* ==================================================
    DROPDOWNS
    ================================================== */
+/* ---------- ช่วงเวลาเช็คชื่อ ---------- */
+function findPeriod(time) {
+  return PERIOD_DEFS.find(p => p.time === time) || null;
+}
+
+function getSelectedPeriod() {
+  const sel = document.getElementById('attendance-period');
+  return sel ? findPeriod(sel.value) : null;
+}
+
+function fillPeriodSelect() {
+  const options = PERIOD_DEFS.map(p => `<option value="${esc(p.time)}">${esc(p.time)} · ${esc(p.activity)}</option>`).join('');
+
+  const sel = document.getElementById('attendance-period');
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">เลือกช่วงเวลา</option>' + options;
+    if (cur && findPeriod(cur)) sel.value = cur;
+  }
+
+  const filter = document.getElementById('filter-period');
+  if (filter && filter.options.length <= 1) {
+    filter.innerHTML = '<option value="">ทุกช่วงเวลา</option>' + options;
+  }
+
+  const table = document.getElementById('period-timetable');
+  if (table) {
+    table.innerHTML = PERIOD_DEFS.map(p => `
+      <div class="flex justify-between gap-3 ${p.kind === 'activity' ? 'font-semibold' : ''}">
+        <span class="shrink-0">${esc(p.time)}</span>
+        <span class="text-right">${esc(p.activity)}</span>
+      </div>`).join('');
+  }
+}
+
+const periodMinutes = t => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+
+// เวลาปัจจุบัน → ช่วงเวลาที่ควรเช็ค: ช่วงที่ตรงอยู่ > ช่วงถัดไป > ช่วงสุดท้ายของวัน
+function currentPeriodTime(now = new Date()) {
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const exact = PERIOD_DEFS.find(p => nowMin >= periodMinutes(p.start) && nowMin <= periodMinutes(p.end));
+  if (exact) return exact.time;
+  const next = PERIOD_DEFS.find(p => nowMin < periodMinutes(p.start));
+  return next ? next.time : PERIOD_DEFS[PERIOD_DEFS.length - 1].time;
+}
+
+function autoSelectPeriod(notify = false) {
+  const sel = document.getElementById('attendance-period');
+  if (!sel) return;
+  const time = currentPeriodTime();
+  sel.value = time;
+  onPeriodChange();
+  if (notify) {
+    const p = findPeriod(time);
+    Swal.fire({
+      icon: 'info', title: 'เลือกช่วงเวลาตามเวลาปัจจุบัน',
+      html: `<div style="font-size:.95rem"><b>${esc(time)}</b>${p ? '<br>' + esc(p.activity) : ''}</div>`,
+      timer: 1800, showConfirmButton: false
+    });
+  }
+}
+
+function onPeriodChange() {
+  updatePeriodHint();
+  updateSubjectDropdown();
+  attendanceFormDirty = true;
+}
+
+function updatePeriodHint() {
+  const p = getSelectedPeriod();
+  const hint = document.getElementById('attendance-period-hint');
+  if (hint) hint.textContent = p ? p.activity : 'เลือกช่วงเวลาก่อนเช็คชื่อ';
+  const subHint = document.getElementById('attendance-subject-hint');
+  if (subHint) {
+    subHint.textContent = !p ? ''
+      : p.kind === 'activity' ? 'กิจกรรมประจำช่วงเวลานี้ (ระบบเลือกให้อัตโนมัติ)'
+      : 'เลือกวิชาตามตารางสอนของช่วงเวลานี้';
+  }
+}
+
 function fillClassSelect(sel, opts = {}) {
   if (!sel) return;
   const cur = sel.value;
@@ -889,6 +1100,7 @@ function initAllClassSelects() {
     fillClassSelect(document.getElementById(id), { all: true }));
   fillClassSelect(document.getElementById('attendance-class'));
   fillClassSelect(document.getElementById('stats-class'), { all: true });
+  fillPeriodSelect();
   updateStatsSubjectDropdown();
   updateStatsStudentDropdown();
 }
@@ -897,6 +1109,19 @@ function updateSubjectDropdown() {
   const cls = normalizeClass(document.getElementById('attendance-class')?.value);
   const sel = document.getElementById('attendance-subject');
   if (!sel) return;
+
+  // ช่วงเวลาที่เป็นกิจกรรมประจำวัน → ล็อกวิชาเป็นชื่อกิจกรรม ไม่ต้องเลือกเอง
+  const period = getSelectedPeriod();
+  if (period && period.kind === 'activity') {
+    sel.innerHTML = `<option value="${esc(period.activity)}">${esc(period.activity)}</option>`;
+    sel.value = period.activity;
+    sel.disabled = true;
+    sel.classList.add('bg-gray-100');
+    return;
+  }
+  sel.disabled = false;
+  sel.classList.remove('bg-gray-100');
+
   const currentSubject = sel.value;
   sel.innerHTML = '<option value="">เลือกวิชา</option>';
   if (!cls) return;
@@ -990,10 +1215,12 @@ function showStorageInfo() {
 async function loadStudentsForAttendance() {
   const date    = document.getElementById('attendance-date').value;
   const cls     = normalizeClass(document.getElementById('attendance-class').value);
+  const periodEl = document.getElementById('attendance-period');
+  const period  = periodEl ? periodEl.value : '';
   const subject = document.getElementById('attendance-subject').value;
 
-  if (!date || !cls || !subject) {
-    Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่ ชั้นเรียน และวิชา', 'warning'); return;
+  if (!date || !cls || !period || !subject) {
+    Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่ ชั้นเรียน ช่วงเวลา และวิชา/กิจกรรม', 'warning'); return;
   }
 
   const list = document.getElementById('student-list');
@@ -1033,23 +1260,34 @@ async function loadStudentsForAttendance() {
     if (!h) { h = { มา:0, สาย:0, ลา:0, ขาด:0 }; hist.set(k, h); }
     if (h[status] !== undefined) h[status]++;
   };
+  // รายการของช่วงเวลานี้เป็นหลัก และใช้รายการเก่าที่ยังไม่มีช่วงเวลาเป็นตัวสำรอง (ไม่ให้บันทึกซ้ำ)
+  const currentLegacy = new Map();
   for (const r of allData.attendance) {
     const id = String(r.attendance_student_id);
     const classes = recordClasses(r);
     for (const c of classes) bump(c + '|' + id, r.attendance_status);
-    if (classes.includes(cls) && r.attendance_date === date && r.attendance_subject === subject) {
-      current.set(id, r);
-    }
+    if (!classes.includes(cls) || r.attendance_date !== date || r.attendance_subject !== subject) continue;
+    if (r.attendance_period === period) current.set(id, r);
+    else if (!r.attendance_period) currentLegacy.set(id, r);
   }
+  currentLegacy.forEach((r, id) => { if (!current.has(id)) current.set(id, r); });
 
   const existingCount = students.filter(s => current.has(String(s.student_id))).length;
+  trackEvent('checkin_roster_loaded', {
+    student_class: cls, subject: subject, period: period,
+    student_count: students.length, already_recorded: existingCount
+  });
   const chipClass = { มา:'s-present', สาย:'s-late', ลา:'s-leave', ขาด:'s-absent' };
   const icons  = { มา:'✅', สาย:'⏰', ลา:'📝', ขาด:'❌' };
   const btnColors = { มา:'green', สาย:'yellow', ลา:'blue', ขาด:'red' };
 
+  const periodDef = findPeriod(period);
   let html = `
     <div class="mb-4 flex flex-wrap justify-between items-center gap-2">
-      <h3 class="text-xl font-bold">ชั้น ${esc(document.getElementById('attendance-class').value)} — วิชา ${esc(subject)}</h3>
+      <div>
+        <h3 class="text-xl font-bold">ชั้น ${esc(document.getElementById('attendance-class').value)} — วิชา ${esc(subject)}</h3>
+        <p class="text-sm text-gray-600">⏱ ช่วงเวลา ${esc(period)}${periodDef ? ' · ' + esc(periodDef.activity) : ''}</p>
+      </div>
       <div class="text-sm bg-blue-50 px-3 py-2 rounded-2xl border border-blue-100">
         👥 <b id="checkin-total">${students.length}</b> คน
         · ✅ เช็คแล้ว <b id="checkin-done">${existingCount}</b> คน
@@ -1156,14 +1394,19 @@ function clearAllStatus() {
   updateCheckinCounter();
 }
 
-// รวมรายการเช็คชื่อที่มีอยู่แล้วของ วัน/ชั้น/วิชา ที่กำลังทำอยู่ → Map(student_id → record)
-function buildExistingAttendanceMap(date, cls, subject) {
+// รวมรายการเช็คชื่อที่มีอยู่แล้วของ วัน/ชั้น/วิชา/ช่วงเวลา ที่กำลังทำอยู่ → Map(student_id → record)
+// รายการที่บันทึกไว้ก่อนมีระบบช่วงเวลา (attendance_period ว่าง) ใช้เป็นตัวสำรอง เพื่อไม่ให้บันทึกซ้ำ
+function buildExistingAttendanceMap(date, cls, subject, period) {
   const map = new Map();
+  const legacy = new Map();
   for (const r of allData.attendance) {
     if (r.attendance_date !== date || r.attendance_subject !== subject) continue;
     if (!recordClasses(r).includes(cls)) continue;
-    map.set(String(r.attendance_student_id), r);
+    const id = String(r.attendance_student_id);
+    if (r.attendance_period === period) map.set(id, r);
+    else if (!r.attendance_period) legacy.set(id, r);
   }
+  legacy.forEach((r, id) => { if (!map.has(id)) map.set(id, r); });
   return map;
 }
 
@@ -1171,14 +1414,17 @@ async function saveAttendance() {
   if (isSavingAttendance) return;
   const date    = document.getElementById('attendance-date').value;
   const cls     = normalizeClass(document.getElementById('attendance-class').value);
+  const period  = document.getElementById('attendance-period')?.value || '';
   const subject = document.getElementById('attendance-subject').value;
-  if (!date || !cls || !subject) { Swal.fire('แจ้งเตือน', 'ข้อมูลไม่ครบ', 'warning'); return; }
+  if (!date || !cls || !period || !subject) {
+    Swal.fire('แจ้งเตือน', 'กรุณาเลือกวันที่ ชั้นเรียน ช่วงเวลา และวิชา/กิจกรรม', 'warning'); return;
+  }
 
   // อ่านจากแถวที่แสดงอยู่จริง (เร็วกว่าวนหา allData + querySelector ต่อคน)
   const rows = [...document.querySelectorAll('#student-list .att-row')];
   if (!rows.length) { Swal.fire('แจ้งเตือน', 'ยังไม่มีรายชื่อนักเรียน', 'warning'); return; }
 
-  const existingMap = buildExistingAttendanceMap(date, cls, subject);
+  const existingMap = buildExistingAttendanceMap(date, cls, subject, period);
   const records   = [];   // รายการที่จะส่งบันทึก
   const conflicts = [];   // รายการเดิมที่ถูกแก้ไข แต่ยังไม่ได้เข้าสู่ระบบ
   let unchanged = 0;
@@ -1197,14 +1443,17 @@ async function saveAttendance() {
       if (noteEl) { noteEl.classList.add('is-invalid'); noteEl.focus(); }
       return;
     }
-    const rec = { date, student_id: id, subject, status: radio.value, notes, cls: row.dataset.class || cls };
+    const rec = { date, student_id: id, subject, period, status: radio.value, notes, cls: row.dataset.class || cls };
     const existing = existingMap.get(id);
     if (existing) {
-      if (existing.attendance_status === rec.status && String(existing.attendance_notes || '') === notes) {
+      const sameValues = existing.attendance_status === rec.status && String(existing.attendance_notes || '') === notes;
+      // แถวเก่าที่ยังไม่มีช่วงเวลา → เติมช่วงเวลาได้โดยไม่ต้องเข้าสู่ระบบ (ค่าเดิมไม่เปลี่ยน)
+      const periodOnlyFill = sameValues && !existing.attendance_period;
+      if (sameValues && String(existing.attendance_period || '') === period) {
         unchanged++;      // ไม่มีอะไรเปลี่ยน ไม่ต้องส่งไปให้เปลืองเวลา
         return;
       }
-      if (!authToken) { conflicts.push(rec); return; }  // แก้รายการเดิมต้องเข้าสู่ระบบ
+      if (!authToken && !periodOnlyFill) { conflicts.push(rec); return; }  // แก้รายการเดิมต้องเข้าสู่ระบบ
     }
     records.push(rec);
   });
@@ -1262,6 +1511,16 @@ async function saveAttendance() {
     const updated  = res.updated  || 0;
     const skipped  = res.skipped  || 0;
 
+    // สถิติ: บันทึกการเช็คชื่อสำเร็จ (ไม่ส่งชื่อ/เลขที่นักเรียน)
+    const statusCounts = { 'มา': 0, 'สาย': 0, 'ลา': 0, 'ขาด': 0 };
+    records.forEach(rec => { if (statusCounts[rec.status] !== undefined) statusCounts[rec.status]++; });
+    trackEvent('attendance_saved', {
+      student_class: cls, subject: subject, period: period,
+      total_students: records.length, inserted: inserted, updated: updated, skipped: skipped,
+      status_present: statusCounts['มา'], status_late: statusCounts['สาย'],
+      status_leave: statusCounts['ลา'], status_absent: statusCounts['ขาด']
+    });
+
     // อัปเดตข้อมูลในเครื่องทันทีโดยใช้ map ที่สร้างไว้แล้ว (ไม่ต้อง find ซ้ำทุกรายการ)
     const statusByStudent = new Map();
     records.forEach(rec => {
@@ -1271,11 +1530,13 @@ async function saveAttendance() {
       if (existing) {
         existing.attendance_status = rec.status;
         existing.attendance_notes = rec.notes;
+        existing.attendance_period = rec.period;
       } else {
         const added = {
           _id: '', attendance_date: rec.date, attendance_student_id: id,
           attendance_subject: rec.subject, attendance_status: rec.status, attendance_notes: rec.notes,
-          created_at: '', attendance_student_class: rec.cls, _cls: normalizeClass(rec.cls)
+          created_at: '', attendance_student_class: rec.cls, attendance_period: rec.period,
+          _cls: normalizeClass(rec.cls)
         };
         allData.attendance.push(added);
         existingMap.set(id, added);
@@ -1292,7 +1553,8 @@ async function saveAttendance() {
       icon: 'success',
       title: '✅ บันทึกการเช็คชื่อสำเร็จ',
       html: `<div style="text-align:left;font-size:.95rem;line-height:1.85">
-          <div>📅 ${fmtThaiDate(date)} · 🎓 ${esc(document.getElementById('attendance-class').value)} · 📚 ${esc(subject)}</div>
+          <div>📅 ${fmtThaiDate(date)} · 🎓 ${esc(document.getElementById('attendance-class').value)}</div>
+          <div>⏱ ${esc(period)} · 📚 ${esc(subject)}</div>
           <hr style="margin:.5rem 0;border:0;border-top:1px solid #eee">
           <div>👨‍🎓 บันทึกครั้งนี้ <b>${records.length}</b> คน</div>
           <div>➕ เพิ่มใหม่ <b>${inserted}</b> รายการ</div>
@@ -1647,13 +1909,16 @@ async function deleteSubject(id) {
 function loadAttendanceData() {
   const date = document.getElementById('filter-date').value;
   const cls  = normalizeClass(document.getElementById('filter-class').value);
+  const period = document.getElementById('filter-period')?.value || '';
   const stat = document.getElementById('filter-status').value;
   const c = document.getElementById('attendance-data-container');
   let list = allData.attendance.slice();
   if (date) list = list.filter(r => r.attendance_date === date);
+  if (period) list = list.filter(r => (r.attendance_period || '') === period);
   if (stat) list = list.filter(r => r.attendance_status === stat);
   if (cls) list = list.filter(r => attendanceMatchesClass(r, cls));
-  list.sort((a, b) => (b.attendance_date || '').localeCompare(a.attendance_date || ''));
+  list.sort((a, b) => (b.attendance_date || '').localeCompare(a.attendance_date || '')
+    || (a.attendance_period || '').localeCompare(b.attendance_period || ''));
 
   if (!list.length) {
     c.innerHTML = `<div class="text-center py-8 text-gray-500"><div class="text-6xl mb-3">📋</div><p>ไม่พบข้อมูล</p></div>`;
@@ -1672,6 +1937,7 @@ function loadAttendanceData() {
           <th class="border px-3 py-2 text-left">ชื่อ-สกุล</th>
           <th class="border px-3 py-2">ชั้น</th>
           <th class="border px-3 py-2 text-left">วิชา</th>
+          <th class="border px-3 py-2">ช่วงเวลา</th>
           <th class="border px-3 py-2">สถานะ</th>
           <th class="border px-3 py-2">หมายเหตุ</th>
           <th class="border px-3 py-2">จัดการ</th>
@@ -1687,6 +1953,9 @@ function loadAttendanceData() {
             <td class="border px-3 py-2">${esc(name)}</td>
             <td class="border px-3 py-2 text-center">${esc(sclass)}</td>
             <td class="border px-3 py-2">${esc(r.attendance_subject || '-')}</td>
+            <td class="border px-3 py-2 text-center text-xs">
+              ${r.attendance_period ? `<b>${esc(r.attendance_period)}</b><br><span class="text-gray-500">${esc((findPeriod(r.attendance_period) || {}).activity || '')}</span>` : '-'}
+            </td>
             <td class="border px-3 py-2 text-center">
               <span class="px-2 py-1 rounded-full text-xs ${statusClass[r.attendance_status] || ''}">
                 ${icons[r.attendance_status] || ''} ${esc(r.attendance_status)}
@@ -1713,6 +1982,7 @@ async function editAttendance(id) {
       <div class="text-left">
         <p class="mb-2"><strong>${esc(st?.student_name || '-')}</strong> — ${fmtThaiDate(r.attendance_date)}</p>
         <p class="mb-2">วิชา: ${esc(r.attendance_subject || '-')}</p>
+        <p class="mb-2">ช่วงเวลา: ${esc(r.attendance_period || '-')}${(findPeriod(r.attendance_period) || {}).activity ? ' · ' + esc(findPeriod(r.attendance_period).activity) : ''}</p>
         <label class="block text-sm mb-1">สถานะ</label>
         <select id="sw-status" class="swal2-input">
           ${STATUS_LIST.map(s => `<option ${s === r.attendance_status ? 'selected' : ''}>${s}</option>`).join('')}
@@ -2439,9 +2709,11 @@ async function testConnection() {
    INIT
    ================================================== */
 document.addEventListener('DOMContentLoaded', async () => {
+  initAnalytics();
   initAllClassSelects();
   document.getElementById('attendance-date').value = todayThaiStr();
   document.getElementById('attendance-class').addEventListener('change', updateSubjectDropdown);
+  autoSelectPeriod();   // เลือกช่วงเวลาตามเวลาปัจจุบันไว้ให้ก่อน (ผู้ใช้เปลี่ยนเองได้)
   const studentList = document.getElementById('student-list');
   if (studentList) {
     studentList.addEventListener('change', () => { attendanceFormDirty = true; updateCheckinCounter(); });

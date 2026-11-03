@@ -58,22 +58,84 @@
   }
   .field:focus { outline: none; border-color: #f43f5e; box-shadow: 0 0 0 4px rgba(244, 63, 94, .14); }
 
-  /* ─── เมนูด้านบน: ติดขอบบน + เลื่อนแนวนอนบนมือถือ ─── */
+  /* ─── NAVBAR: ติดขอบบน · เดสก์ท็อปเป็นเมนูแนวนอน · มือถือเป็นแฮมเบอร์เกอร์ ─── */
   .nav-bar {
-    position: sticky; top: 0; z-index: 40;
-    background: rgba(255, 255, 255, .92);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255, 255, 255, .97);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid #fecdd3;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, .05);
   }
-  .nav-scroll {
-    display: flex; gap: .5rem; padding: .7rem 0;
-    overflow-x: auto; scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
+  .nav-inner { display: flex; align-items: center; gap: .6rem; min-height: 3.6rem; }
+  .nav-brand { display: flex; align-items: center; gap: .55rem; min-width: 0; text-decoration: none; }
+  .nav-logo { width: 2.1rem; height: 2.1rem; object-fit: contain; border-radius: .7rem; flex: none; }
+  .nav-brand-text {
+    display: flex; flex-direction: column; line-height: 1.15;
+    font-weight: 700; color: #be123c; font-size: .95rem; white-space: nowrap;
   }
-  .nav-scroll::-webkit-scrollbar { display: none; }
-  @media (min-width: 640px) {
-    .nav-scroll { flex-wrap: wrap; justify-content: center; overflow-x: visible; }
+  .nav-brand-text small { font-weight: 500; color: #9ca3af; font-size: .7rem; }
+  .nav-links { display: flex; align-items: center; gap: .15rem; flex: 1; justify-content: center; }
+  .nav-link {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .5rem .7rem; border-radius: .7rem;
+    font-size: .9rem; font-weight: 600; color: #374151; white-space: nowrap;
+    background: transparent; transition: background .18s, color .18s, box-shadow .18s;
+  }
+  .nav-link:hover { background: #fff1f2; color: #be123c; }
+  .nav-link.is-active { background: #e11d48; color: #fff; box-shadow: 0 4px 12px rgba(225, 29, 72, .28); }
+  .nav-actions { display: flex; align-items: center; gap: .35rem; margin-left: auto; }
+  .nav-status { font-size: .76rem; font-weight: 600; color: #6b7280; white-space: nowrap; }
+  .nav-link-login { background: #059669; color: #fff; }
+  .nav-link-logout { background: #4b5563; color: #fff; }
+  .nav-toggle {
+    display: none; width: 2.6rem; height: 2.6rem; border-radius: .75rem;
+    border: 1px solid #fecdd3; background: #fff;
+    flex-direction: column; align-items: center; justify-content: center; gap: .3rem;
+  }
+  .nav-toggle span {
+    display: block; width: 1.15rem; height: 2px; background: #be123c;
+    border-radius: 99px; transition: transform .2s ease, opacity .2s ease;
+  }
+  .nav-toggle.is-open span:nth-child(1) { transform: translateY(.35rem) rotate(45deg); }
+  .nav-toggle.is-open span:nth-child(2) { opacity: 0; }
+  .nav-toggle.is-open span:nth-child(3) { transform: translateY(-.35rem) rotate(-45deg); }
+  .nav-mobile { display: none; padding-bottom: .8rem; }
+  .nav-mobile.is-open { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
+  .nav-mobile-link {
+    display: flex; align-items: center; gap: .35rem;
+    padding: .7rem .8rem; border-radius: .85rem;
+    background: #fff1f2; color: #9f1239; font-weight: 600; font-size: .88rem; text-align: left;
+  }
+  .nav-mobile-link.is-active { background: #e11d48; color: #fff; }
+  @media (max-width: 1023px) {
+    .nav-links { display: none; }
+    .nav-status { display: none; }
+    .nav-toggle { display: flex; }
+  }
+  @media (min-width: 1024px) {
+    .nav-mobile { display: none !important; }
+  }
+
+  /* ─── แท็บสถิติ: เลื่อนแนวนอนบนมือถือ ─── */
+  .stats-tabs {
+    display: flex; gap: .5rem; overflow-x: auto;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: .15rem;
+  }
+  .stats-tabs::-webkit-scrollbar { display: none; }
+  .stats-tabs > * { flex: none; }
+  @media (min-width: 768px) {
+    .stats-tabs { flex-wrap: wrap; justify-content: center; overflow-x: visible; }
+  }
+
+  /* ─── ปรับขนาดให้อ่านง่ายบนสมาร์ทโฟน ─── */
+  @media (max-width: 640px) {
+    .app-header .logo-size { width: 1.35cm; height: 1.35cm; }
+    .card { border-radius: 1rem; }
+    .btn { padding: .6rem 1rem; font-size: .95rem; }
+    .nav-brand-text small { display: none; }
+    .nav-brand-text { font-size: .88rem; }
+    .stats-tabs { justify-content: flex-start; }
   }
 
   /* ─── ตาราง: เลื่อนแนวนอนบนจอเล็ก ไม่หดตัวจนอ่านไม่ออก ─── */
@@ -156,32 +218,55 @@
 
 <!-- HEADER -->
 <header class="app-header text-white shadow-lg">
-  <div class="container mx-auto px-4 py-6 sm:py-8">
+  <div class="container mx-auto px-4 py-4 sm:py-8">
     <div class="flex flex-col items-center">
       <img src="https://img2.pic.in.th/Logo-.ec8bd4b098cae1a0.png"
-           alt="โลโก้" class="logo-size mb-3 rounded-2xl shadow-lg ring-4 ring-white/20"
+           alt="โลโก้" class="logo-size mb-2 sm:mb-3 rounded-2xl shadow-lg ring-4 ring-white/20"
            onerror="this.style.display='none'">
-      <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-1">ระบบเช็คชื่อนักเรียน</h1>
-      <p class="text-base sm:text-lg text-red-100 text-center">โรงเรียนบ้านหนองขุย (นาคสวัสดิ์ประชานุเคราะห์)</p>
+      <h1 class="text-xl sm:text-3xl md:text-4xl font-bold text-center mb-1">ระบบเช็คชื่อนักเรียน</h1>
+      <p class="text-sm sm:text-lg text-red-100 text-center">โรงเรียนบ้านหนองขุย (นาคสวัสดิ์ประชานุเคราะห์)</p>
       <p id="connection-status" class="text-xs sm:text-sm mt-2 px-3 py-1 rounded-full font-medium bg-white/20 text-red-100">⏳ กำลังเชื่อมต่อ...</p>
     </div>
   </div>
 </header>
 
 <!-- NAV -->
-<nav class="nav-bar shadow-md">
+<nav class="nav-bar" id="main-nav">
   <div class="container mx-auto px-3 sm:px-4">
-    <div class="nav-scroll">
-      <button onclick="showPage('dashboard')"    class="nav-button whitespace-nowrap bg-red-600 hover:bg-red-700       text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">🏠 หน้าหลัก</button>
-      <button onclick="showPage('checkin')"      class="nav-button whitespace-nowrap bg-red-600 hover:bg-red-700       text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">✅ เช็คชื่อ</button>
-      <button onclick="showPage('statistics')"   class="nav-button whitespace-nowrap bg-red-600 hover:bg-red-700       text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">📊 สถิติ</button>
-      <button onclick="showPage('add-student')"  class="nav-button whitespace-nowrap bg-red-600 hover:bg-red-700       text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">👨‍🎓 เพิ่มนักเรียน</button>
-      <button onclick="showPage('add-subject')"  class="nav-button whitespace-nowrap bg-red-600 hover:bg-red-700       text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">📚 เพิ่มวิชา</button>
-      <button onclick="showPage('manage-data')"  class="nav-button whitespace-nowrap bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">⚙️ จัดการข้อมูล</button>
-      <button onclick="showPage('admin')"        class="nav-button whitespace-nowrap bg-gray-700 hover:bg-gray-800    text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">🔐 Admin</button>
-      <span id="auth-nav-status" class="self-center text-sm font-semibold text-gray-600 px-2">🔒 ยังไม่เข้าสู่ระบบ</span>
-      <button id="login-nav-button" onclick="openLogin()" class="nav-button whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold">🔑 เข้าสู่ระบบ</button>
-      <button id="logout-nav-button" onclick="logout()" class="nav-button whitespace-nowrap bg-gray-600 hover:bg-gray-700 text-white px-4 py-2.5 rounded-full text-sm sm:text-base font-semibold hidden">🚪 ออกจากระบบ</button>
+    <div class="nav-inner">
+      <a href="#" onclick="showPage('dashboard'); return false;" class="nav-brand" aria-label="หน้าหลัก">
+        <img src="https://img2.pic.in.th/Logo-.ec8bd4b098cae1a0.png" alt="โลโก้" class="nav-logo" onerror="this.style.display='none'">
+        <span class="nav-brand-text">ระบบเช็คชื่อนักเรียน<small>บ้านหนองขุย</small></span>
+      </a>
+
+      <div class="nav-links">
+        <button data-nav="dashboard"   onclick="showPage('dashboard')"   class="nav-link">🏠 หน้าหลัก</button>
+        <button data-nav="checkin"     onclick="showPage('checkin')"     class="nav-link">✅ เช็คชื่อ</button>
+        <button data-nav="statistics"  onclick="showPage('statistics')"  class="nav-link">📊 สถิติ</button>
+        <button data-nav="add-student" onclick="showPage('add-student')" class="nav-link">👨‍🎓 เพิ่มนักเรียน</button>
+        <button data-nav="add-subject" onclick="showPage('add-subject')" class="nav-link">📚 เพิ่มวิชา</button>
+        <button data-nav="manage-data" onclick="showPage('manage-data')" class="nav-link">⚙️ จัดการข้อมูล</button>
+        <button data-nav="admin"       onclick="showPage('admin')"       class="nav-link">🔐 Admin</button>
+      </div>
+
+      <div class="nav-actions">
+        <span id="auth-nav-status" class="nav-status">🔒 ยังไม่เข้าสู่ระบบ</span>
+        <button id="login-nav-button" onclick="openLogin()" class="nav-link nav-link-login">🔑 เข้าสู่ระบบ</button>
+        <button id="logout-nav-button" onclick="logout()" class="nav-link nav-link-logout hidden">🚪 ออกจากระบบ</button>
+        <button id="nav-toggle" onclick="toggleNav()" class="nav-toggle" aria-label="เปิดเมนู" aria-expanded="false" aria-controls="nav-mobile">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+
+    <div id="nav-mobile" class="nav-mobile">
+      <button data-nav="dashboard"   onclick="showPage('dashboard'); toggleNav(false)"   class="nav-mobile-link">🏠 หน้าหลัก</button>
+      <button data-nav="checkin"     onclick="showPage('checkin'); toggleNav(false)"     class="nav-mobile-link">✅ เช็คชื่อ</button>
+      <button data-nav="statistics"  onclick="showPage('statistics'); toggleNav(false)"  class="nav-mobile-link">📊 สถิติ</button>
+      <button data-nav="add-student" onclick="showPage('add-student'); toggleNav(false)" class="nav-mobile-link">👨‍🎓 เพิ่มนักเรียน</button>
+      <button data-nav="add-subject" onclick="showPage('add-subject'); toggleNav(false)" class="nav-mobile-link">📚 เพิ่มวิชา</button>
+      <button data-nav="manage-data" onclick="showPage('manage-data'); toggleNav(false)" class="nav-mobile-link">⚙️ จัดการข้อมูล</button>
+      <button data-nav="admin"       onclick="showPage('admin'); toggleNav(false)"       class="nav-mobile-link">🔐 Admin</button>
     </div>
   </div>
 </nav>
@@ -208,7 +293,7 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
       <div>
         <label class="block text-sm font-semibold mb-2">📅 วันที่</label>
-        <input type="date" id="attendance-date" class="field" onchange="onCheckinContextChange()">
+        <input type="text" id="attendance-date" class="field date-field" inputmode="numeric" maxlength="10" placeholder="วว/ดด/ปปปป" autocomplete="off" onchange="onCheckinContextChange()">
       </div>
       <div>
         <label class="block text-sm font-semibold mb-2">🎓 ชั้นเรียน</label>
@@ -244,14 +329,22 @@
 <div id="statistics-page" class="page hidden">
   <div class="text-center mb-6">
     <h2 class="text-2xl sm:text-3xl font-bold text-gray-800">📊 สถิติการเข้าเรียน</h2>
-    <p class="text-gray-500 text-sm sm:text-base mt-1">ดูได้ทั้ง <b>ภาพรวม</b> · <b>รายห้องเรียนตามช่วงเวลาเช็คชื่อ</b> · <b>ทั้งโรงเรียน</b> และ <b>รายบุคคล</b> · ส่งออกเป็น Excel / Word ได้</p>
+    <p class="text-gray-500 text-sm sm:text-base mt-1">ดูได้ทั้ง <b>ภาพรวม</b> · <b>รายห้องเรียน</b> (ช่วงเวลา / รายวิชา / กำหนดเอง) · <b>ทั้งโรงเรียน</b> (ช่วงเวลา / รายวิชา) · <b>อันดับ / เกณฑ์ 80%</b> · <b>กิจกรรม</b> และ <b>รายบุคคล</b> · ส่งออกเป็น Excel / Word ได้ทุกโหมด</p>
   </div>
 
-  <div class="flex flex-wrap justify-center gap-2 mb-5">
+  <div class="stats-tabs mb-3 sm:justify-center">
     <button id="stats-tab-overview" onclick="setStatsMode('overview')" class="btn bg-red-600 text-white">📊 ภาพรวม</button>
     <button id="stats-tab-classroom" onclick="setStatsMode('classroom')" class="btn bg-white text-gray-700 border border-gray-200">🏫 รายห้องเรียน</button>
     <button id="stats-tab-school" onclick="setStatsMode('school')" class="btn bg-white text-gray-700 border border-gray-200">🏢 ทั้งโรงเรียน</button>
+    <button id="stats-tab-ranking" onclick="setStatsMode('ranking')" class="btn bg-white text-gray-700 border border-gray-200">🏅 อันดับ / เกณฑ์ 80%</button>
+    <button id="stats-tab-activity" onclick="setStatsMode('activity')" class="btn bg-white text-gray-700 border border-gray-200">🎯 กิจกรรม</button>
     <button id="stats-tab-student" onclick="setStatsMode('student')" class="btn bg-white text-gray-700 border border-gray-200">👤 รายบุคคล</button>
+  </div>
+
+  <div id="stats-view-tabs" class="stats-tabs mb-5 hidden">
+    <button id="stats-view-period" onclick="setStatsView('period')" class="btn bg-white text-gray-700 border border-gray-200">⏱ ช่วงเวลา</button>
+    <button id="stats-view-subject" onclick="setStatsView('subject')" class="btn bg-white text-gray-700 border border-gray-200">📚 รายวิชา</button>
+    <button id="stats-view-custom" onclick="setStatsView('custom')" class="btn bg-white text-gray-700 border border-gray-200">✏️ กำหนดเอง</button>
   </div>
 
   <div class="card p-5 sm:p-6 mb-6">
@@ -262,11 +355,11 @@
       </div>
       <div id="stats-subject-wrap">
         <label class="block text-sm font-semibold mb-2 text-gray-700">📚 รายวิชา</label>
-        <select id="stats-subject" class="field"></select>
+        <select id="stats-subject" class="field" onchange="loadStatistics()"></select>
       </div>
       <div id="stats-range-wrap">
         <label class="block text-sm font-semibold mb-2 text-gray-700">📅 ช่วงเวลา</label>
-        <select id="stats-period" class="field" onchange="toggleCustomDate()">
+        <select id="stats-period" class="field" onchange="onStatsRangeChange()">
           <option value="all">🗓️ ทั้งหมด</option>
           <option value="today">วันนี้</option>
           <option value="yesterday">เมื่อวาน</option>
@@ -277,7 +370,7 @@
       </div>
       <div id="stats-day-wrap" class="hidden">
         <label class="block text-sm font-semibold mb-2 text-gray-700">📅 วันที่เช็คชื่อ</label>
-        <input type="date" id="stats-day" class="field" onchange="loadStatistics()">
+        <input type="text" id="stats-day" class="field date-field" inputmode="numeric" maxlength="10" placeholder="วว/ดด/ปปปป" autocomplete="off" onchange="loadStatistics()">
       </div>
       <div class="flex items-end">
         <button onclick="loadStatistics()" class="btn bg-red-600 hover:bg-red-700 text-white w-full">📈 โหลดสถิติ</button>
@@ -291,8 +384,21 @@
 
     <div id="custom-date-range" class="hidden mt-4 p-4 bg-blue-50 rounded-2xl border border-blue-100">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div><label class="block text-sm font-semibold mb-2 text-gray-700">📅 ตั้งแต่</label><input type="date" id="start-date" class="field"></div>
-        <div><label class="block text-sm font-semibold mb-2 text-gray-700">📅 ถึง</label><input type="date" id="end-date" class="field"></div>
+        <div><label class="block text-sm font-semibold mb-2 text-gray-700">📅 ตั้งแต่ (วว/ดด/ปปปป)</label><input type="text" id="start-date" class="field date-field" inputmode="numeric" maxlength="10" placeholder="วว/ดด/ปปปป" autocomplete="off" onchange="loadStatistics()"></div>
+        <div><label class="block text-sm font-semibold mb-2 text-gray-700">📅 ถึง (วว/ดด/ปปปป)</label><input type="text" id="end-date" class="field date-field" inputmode="numeric" maxlength="10" placeholder="วว/ดด/ปปปป" autocomplete="off" onchange="loadStatistics()"></div>
+      </div>
+    </div>
+
+    <div id="stats-custom-wrap" class="hidden mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold mb-2 text-gray-700">⏱ เฉพาะช่วงเวลา</label>
+          <select id="stats-period-pick" class="field" onchange="loadStatistics()"></select>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2 text-gray-700">📚 เฉพาะรายวิชา (เลือกได้ที่ช่อง “รายวิชา” ด้านบน)</label>
+          <p class="text-xs text-gray-600 leading-relaxed">เว้นว่างไว้ = ทุกวิชา · ใช้ช่วงวันที่จากตัวเลือก “ช่วงเวลา” ด้านบน</p>
+        </div>
       </div>
     </div>
 
@@ -301,7 +407,7 @@
       <button onclick="exportStats('docx')" class="btn bg-blue-600 hover:bg-blue-700 text-white">📄 ส่งออก Word (.docx)</button>
     </div>
 
-    <p class="text-xs text-gray-500 mt-3">💡 ไฟล์ที่ส่งออกจะใช้ <b>ชั้นเรียน · รายวิชา · ช่วงเวลา</b> ที่เลือกอยู่ และเป็นข้อมูลของ<b>โหมดที่กำลังดู</b> (ภาพรวม/รายบุคคล)</p>
+    <p class="text-xs text-gray-500 mt-3">💡 ไฟล์ที่ส่งออกจะใช้ <b>ชั้นเรียน · รายวิชา · ช่วงเวลา</b> ที่เลือกอยู่ และเป็นข้อมูลของ<b>มุมมองที่กำลังดู</b> ทุกโหมด (ภาพรวม · รายห้องเรียน · ทั้งโรงเรียน · รายบุคคล)</p>
   </div>
 
   <div id="statistics-content" class="card p-5 sm:p-6">
@@ -461,7 +567,7 @@
     <div class="card p-6">
       <h3 class="text-xl font-semibold mb-4">✅ ข้อมูลการเช็คชื่อ</h3>
       <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
-        <div><label class="block text-sm font-semibold mb-2">📅 วันที่</label><input type="date" id="filter-date" class="field"></div>
+        <div><label class="block text-sm font-semibold mb-2">📅 วันที่ (วว/ดด/ปปปป)</label><input type="text" id="filter-date" class="field date-field" inputmode="numeric" maxlength="10" placeholder="วว/ดด/ปปปป" autocomplete="off"></div>
         <div><label class="block text-sm font-semibold mb-2">🎓 ชั้น</label>
           <select id="filter-class" class="field"><option value="">ทุกชั้น</option></select></div>
         <div><label class="block text-sm font-semibold mb-2">⏱ ช่วงเวลา</label>
@@ -868,6 +974,68 @@ function fmtThaiDate(dateStr) {
   try { return new Date(dateStr + 'T00:00:00').toLocaleDateString('th-TH'); }
   catch { return dateStr; }
 }
+
+/* ────────────────────────────────────────────────
+   ช่องวันที่รูปแบบ วัน/เดือน/ปี (วว/ดด/ปปปป พ.ศ.)
+   เก็บค่าจริงเป็น ISO (ค.ศ.) ไว้ใน dataset.iso
+   ──────────────────────────────────────────────── */
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function dateFieldDisplay(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  return `${m[3]}/${m[2]}/${Number(m[1]) + 543}`;
+}
+
+function parseDisplayDate(text) {
+  const digits = String(text || '').replace(/[^\d]/g, '');
+  if (digits.length !== 8) return '';
+  const d = Number(digits.slice(0, 2));
+  const mo = Number(digits.slice(2, 4));
+  let y = Number(digits.slice(4, 8));
+  if (y < 2400) y += 543;                 // พิมพ์ปี ค.ศ. มาก็รับได้
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+  const dt = new Date(Date.UTC(y - 543, mo - 1, d));
+  if (dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return '';
+  return `${y - 543}-${pad2(mo)}-${pad2(d)}`;
+}
+
+function dateFieldValue(el) {
+  if (!el) return '';
+  if (el.dataset && el.dataset.iso) return el.dataset.iso;
+  return parseDisplayDate(el.value);
+}
+
+function setDateField(el, iso) {
+  if (!el) return;
+  el.dataset.iso = iso || '';
+  el.value = dateFieldDisplay(iso);
+  el.classList.remove('border-red-400');
+}
+
+function maskDateField(el) {
+  const digits = String(el.value || '').replace(/[^\d]/g, '').slice(0, 8);
+  let out = digits.slice(0, 2);
+  if (digits.length > 2) out += '/' + digits.slice(2, 4);
+  if (digits.length > 4) out += '/' + digits.slice(4, 8);
+  if (out !== el.value) el.value = out;
+  const iso = parseDisplayDate(digits);
+  el.dataset.iso = iso;
+  el.classList.toggle('border-red-400', digits.length === 8 && !iso);
+}
+
+function initDateFields() {
+  document.querySelectorAll('.date-field').forEach(el => {
+    if (el.dataset.dateInit) return;
+    el.dataset.dateInit = '1';
+    if (el.dataset.iso) el.value = dateFieldDisplay(el.dataset.iso);
+    el.addEventListener('input', () => maskDateField(el));
+    el.addEventListener('blur', () => {
+      const iso = dateFieldValue(el);
+      if (iso) setDateField(el, iso);   // จัดรูปปี พ.ศ. ให้เหมือนกันทุกช่อง
+    });
+  });
+}
 function showLoading(title = 'กำลังดำเนินการ...') {
   Swal.fire({ title, allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 }
@@ -914,9 +1082,37 @@ function showPage(id) {
   }
   if (id === 'manage-data') showManageMode('students');
   if (id === 'admin') { loadAdminInfo(); renderAnalyticsConsent(); }
+  setActiveNav(id);
   trackEvent('screen_viewed', { screen: id });
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+function setActiveNav(id) {
+  document.querySelectorAll('[data-nav]').forEach(el => {
+    el.classList.toggle('is-active', el.dataset.nav === id);
+  });
+}
+
+function toggleNav(force) {
+  const panel = document.getElementById('nav-mobile');
+  const btn = document.getElementById('nav-toggle');
+  if (!panel) return;
+  const open = typeof force === 'boolean' ? force : !panel.classList.contains('is-open');
+  panel.classList.toggle('is-open', open);
+  if (btn) {
+    btn.classList.toggle('is-open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+}
+
+document.addEventListener('click', e => {
+  const panel = document.getElementById('nav-mobile');
+  if (!panel || !panel.classList.contains('is-open')) return;
+  if (e.target.closest('#main-nav')) return;
+  toggleNav(false);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleNav(false); });
+window.addEventListener('resize', () => { if (window.innerWidth >= 1024) toggleNav(false); });
 
 function clearAuthSession() {
   authToken = '';
@@ -1030,7 +1226,7 @@ function getSelectedPeriod() {
    - ช่วงที่บันทึกไว้ไม่ครบทุกคน ยังกลับมาเช็คต่อด้วยวิชาเดิมได้
    - ช่วงที่เช็คครบทุกคนแล้ว แก้ไขได้เมื่อเข้าสู่ระบบเท่านั้น */
 function checkinDateValue() {
-  return document.getElementById('attendance-date')?.value || '';
+  return dateFieldValue(document.getElementById('attendance-date'));
 }
 
 function checkinClassValue() {
@@ -1137,8 +1333,9 @@ function onCheckinContextChange() {
 function openPeriodRecords(cls, date) {
   const dayEl = document.getElementById('stats-day');
   const classEl = document.getElementById('stats-class');
-  if (dayEl) dayEl.value = date;
+  if (dayEl) setDateField(dayEl, date);
   if (classEl) classEl.value = cls;
+  statsView.classroom = 'period';
   showPage('statistics');
   setStatsMode('classroom');
 }
@@ -1151,6 +1348,11 @@ function fillPeriodSelect() {
   const filter = document.getElementById('filter-period');
   if (filter && filter.options.length <= 1) {
     filter.innerHTML = '<option value="">ทุกช่วงเวลา</option>' + options;
+  }
+
+  const statPick = document.getElementById('stats-period-pick');
+  if (statPick && statPick.options.length <= 1) {
+    statPick.innerHTML = '<option value="">ทุกช่วงเวลา</option>' + options;
   }
 
   const table = document.getElementById('period-timetable');
@@ -1241,7 +1443,7 @@ function initAllClassSelects() {
   fillClassSelect(document.getElementById('attendance-class'));
   fillClassSelect(document.getElementById('stats-class'), { all: true });
   const statsDay = document.getElementById('stats-day');
-  if (statsDay) statsDay.value = todayThaiStr();
+  if (statsDay) setDateField(statsDay, todayThaiStr());
   fillPeriodSelect();
   updateStatsSubjectDropdown();
   updateStatsStudentDropdown();
@@ -1358,7 +1560,7 @@ function showStorageInfo() {
    CHECK-IN
    ================================================== */
 async function loadStudentsForAttendance() {
-  const date    = document.getElementById('attendance-date').value;
+  const date    = dateFieldValue(document.getElementById('attendance-date'));
   const cls     = normalizeClass(document.getElementById('attendance-class').value);
   const periodEl = document.getElementById('attendance-period');
   const period  = periodEl ? periodEl.value : '';
@@ -1572,7 +1774,7 @@ function buildExistingAttendanceMap(date, cls, subject, period) {
 
 async function saveAttendance() {
   if (isSavingAttendance) return;
-  const date    = document.getElementById('attendance-date').value;
+  const date    = dateFieldValue(document.getElementById('attendance-date'));
   const cls     = normalizeClass(document.getElementById('attendance-class').value);
   const period  = document.getElementById('attendance-period')?.value || '';
   const subject = document.getElementById('attendance-subject').value;
@@ -2080,7 +2282,7 @@ async function deleteSubject(id) {
 }
 
 function loadAttendanceData() {
-  const date = document.getElementById('filter-date').value;
+  const date = dateFieldValue(document.getElementById('filter-date'));
   const cls  = normalizeClass(document.getElementById('filter-class').value);
   const period = document.getElementById('filter-period')?.value || '';
   const stat = document.getElementById('filter-status').value;
@@ -2201,15 +2403,23 @@ async function deleteAttendance(id) {
 /* ==================================================
    STATISTICS
    ================================================== */
+function onStatsRangeChange() {
+  toggleCustomDate();
+  loadStatistics();
+}
+
 function toggleCustomDate() {
   const p = document.getElementById('stats-period').value;
   const el = document.getElementById('custom-date-range');
-  el.classList.toggle('hidden', p !== 'custom');
-  if (p === 'custom') {
-    const today = todayThaiStr();
+  const show = p === 'custom';
+  el.classList.toggle('hidden', !show);
+  if (!show) return;
+  const startEl = document.getElementById('start-date');
+  const endEl = document.getElementById('end-date');
+  if (!dateFieldValue(startEl) || !dateFieldValue(endEl)) {
     const w = new Date(); w.setDate(w.getDate() - 7);
-    document.getElementById('start-date').value = toThaiStr(w);
-    document.getElementById('end-date').value = today;
+    if (!dateFieldValue(startEl)) setDateField(startEl, toThaiStr(w));
+    if (!dateFieldValue(endEl)) setDateField(endEl, todayThaiStr());
   }
 }
 
@@ -2230,8 +2440,8 @@ function getDateRange() {
       return { start: toThaiStr(m), end: today };
     }
     case 'custom': {
-      const s = document.getElementById('start-date').value;
-      const e = document.getElementById('end-date').value;
+      const s = dateFieldValue(document.getElementById('start-date'));
+      const e = dateFieldValue(document.getElementById('end-date'));
       if (!s || !e) return null;
       return { start: s, end: e };
     }
@@ -2245,7 +2455,7 @@ function getDateRange() {
 let statsMode = 'overview';   // 'overview' | 'student'
 let lastStatsReport = null;
 
-const STATS_MODES = ['overview', 'classroom', 'school', 'student'];
+const STATS_MODES = ['overview', 'classroom', 'school', 'ranking', 'activity', 'student'];
 
 function setStatsMode(mode) {
   statsMode = STATS_MODES.includes(mode) ? mode : 'overview';
@@ -2255,22 +2465,15 @@ function setStatsMode(mode) {
     const tab = document.getElementById('stats-tab-' + m);
     if (tab) tab.className = statsMode === m ? active : idle;
   });
-  const dayMode = statsMode === 'classroom' || statsMode === 'school';
-  document.getElementById('stats-student-wrap')?.classList.toggle('hidden', statsMode !== 'student');
-  document.getElementById('stats-day-wrap')?.classList.toggle('hidden', !dayMode);
-  document.getElementById('stats-range-wrap')?.classList.toggle('hidden', dayMode);
-  document.getElementById('stats-class-wrap')?.classList.toggle('hidden', statsMode === 'school');
-  document.getElementById('stats-subject-wrap')?.classList.toggle('hidden', dayMode);
-  document.getElementById('stats-export-wrap')?.classList.toggle('hidden', dayMode);
-  if (dayMode) statsDayValue();
   if (statsMode === 'student') updateStatsStudentDropdown();
+  syncStatsFilters();
   loadStatistics();
 }
 
 function onStatsClassChange() {
   updateStatsSubjectDropdown();
   updateStatsStudentDropdown();
-  if (statsMode === 'classroom') loadStatistics();
+  if (statsMode === 'classroom' || statsMode === 'school' || statsMode === 'ranking') loadStatistics();
 }
 
 function updateStatsStudentDropdown() {
@@ -2399,8 +2602,9 @@ function buildStatsReport() {
 function statsDayValue() {
   const el = document.getElementById('stats-day');
   if (!el) return todayThaiStr();
-  if (!el.value) el.value = todayThaiStr();
-  return el.value;
+  const v = dateFieldValue(el);
+  if (!v) { setDateField(el, todayThaiStr()); return todayThaiStr(); }
+  return v;
 }
 
 function statsMetricCard(value, label, gradient) {
@@ -2468,7 +2672,22 @@ function buildClassTimetableReport() {
     totalRec: timed.length,
     checkedPeriods: periods.filter(p => p.state !== 'none').length,
     totalPeriods: periods.length,
-    legacyCount: legacy.length
+    legacyCount: legacy.length,
+    view: 'period',
+    generatedAt: new Date(),
+    metaLines: [
+      `ชั้นเรียน: ${clsEl && clsEl.value ? clsEl.value : '-'}`,
+      `วันที่: ${fmtThaiDate(day)}`,
+      `ช่วงที่เช็คแล้ว: ${periods.filter(p => p.state !== 'none').length}/${periods.length}`,
+      `รายการเช็คชื่อ: ${timed.length} · อัตราการมา: ${statusTally(timed).rate.toFixed(1)}%`
+    ],
+    sheets: [{
+      name: 'ตารางช่วงเวลา',
+      headers: ['ช่วงเวลา', 'กิจกรรม / รายวิชา', 'มา', 'สาย', 'ลา', 'ขาด', 'รวม', 'นักเรียนที่เช็ค', 'นักเรียนทั้งห้อง', 'สถานะ'],
+      rows: periods.map(p => [p.time, p.label, p.tally.มา, p.tally.สาย, p.tally.ลา, p.tally.ขาด, p.tally.total,
+        p.checkedStudents, p.classStudents || 0,
+        p.state === 'none' ? 'ยังไม่เช็คชื่อ' : p.state === 'full' ? 'เช็คครบ' : 'บางส่วน'])
+    }]
   };
 }
 
@@ -2583,7 +2802,21 @@ function buildSchoolDayReport() {
     noCheckinClasses: rows.filter(r => r.totalRec === 0 && r.legacyCount === 0).map(r => r.cls),
     legacyOnlyClasses: rows.filter(r => r.totalRec === 0 && r.legacyCount > 0).map(r => r.cls),
     fullClasses: rows.filter(r => r.checkedPeriods === rows[0]?.cells.length).map(r => r.cls),
-    idlePeriods: periodSummary.filter(p => p.classesChecked === 0)
+    idlePeriods: periodSummary.filter(p => p.classesChecked === 0),
+    view: 'period',
+    generatedAt: new Date(),
+    metaLines: [
+      `วันที่: ${fmtThaiDate(day)}`,
+      `ชั้นที่มีการเช็คชื่อ: ${rows.filter(r => r.totalRec > 0).length}/${rows.length}`,
+      `รายการเช็คชื่อ: ${timed.length}`
+    ],
+    sheets: [{
+      name: 'ตารางทั้งโรงเรียน',
+      headers: ['ชั้น', 'นักเรียน'].concat(periodSummary.map(p => p.time)).concat(['ช่วงที่ยังไม่เช็ค']),
+      rows: rows.map(r => [r.cls, r.students]
+        .concat(r.cells.map(c => (c.count ? `${c.students}/${c.classStudents}` : '-')))
+        .concat([`${periodSummary.length - r.checkedPeriods}/${periodSummary.length}`]))
+    }]
   };
 }
 
@@ -2668,13 +2901,962 @@ function renderSchoolDay(rep) {
   return html;
 }
 
+/* ────────────────────────────────────────────────
+   มุมมองย่อยของสถิติ: ช่วงเวลา / รายวิชา / กำหนดเอง
+   ──────────────────────────────────────────────── */
+const STATS_VIEWS = { classroom: ['period', 'subject', 'custom'], school: ['period', 'subject'] };
+let statsView = { classroom: 'period', school: 'period' };
+
+function statsViewNow() {
+  const allowed = STATS_VIEWS[statsMode] || [];
+  return allowed.indexOf(statsView[statsMode]) >= 0 ? statsView[statsMode] : 'period';
+}
+
+function setStatsView(view) {
+  const allowed = STATS_VIEWS[statsMode] || [];
+  statsView[statsMode] = allowed.indexOf(view) >= 0 ? view : 'period';
+  syncStatsFilters();
+  loadStatistics();
+}
+
+function syncStatsFilters() {
+  const mode = statsMode;
+  const view = statsViewNow();
+  const allowed = STATS_VIEWS[mode] || [];
+
+  const viewWrap = document.getElementById('stats-view-tabs');
+  if (viewWrap) viewWrap.classList.toggle('hidden', !allowed.length);
+  ['period', 'subject', 'custom'].forEach(v => {
+    const btn = document.getElementById('stats-view-' + v);
+    if (!btn) return;
+    btn.className = 'btn ' + (view === v ? 'bg-red-600 text-white' : 'bg-white text-gray-700 border border-gray-200');
+    btn.classList.toggle('hidden', allowed.indexOf(v) < 0);
+  });
+
+  const dayMode = (mode === 'classroom' || mode === 'school') && view === 'period';
+  const rangeMode = !dayMode;
+  const show = (id, on) => document.getElementById(id)?.classList.toggle('hidden', !on);
+
+  show('stats-day-wrap', dayMode);
+  show('stats-range-wrap', rangeMode);
+  show('stats-class-wrap', mode !== 'activity' && (mode !== 'school' || view === 'subject'));
+  show('stats-subject-wrap', mode === 'overview' || mode === 'student' || mode === 'ranking' || (mode === 'classroom' && (view === 'custom' || view === 'subject')));
+  show('stats-student-wrap', mode === 'student');
+  show('stats-custom-wrap', mode === 'classroom' && view === 'custom');
+  show('stats-export-wrap', true);
+
+  const rangeSelect = document.getElementById('stats-period');
+  if (rangeMode && rangeSelect && rangeSelect.value === 'custom') toggleCustomDate();
+  else show('custom-date-range', false);
+
+  if (dayMode) statsDayValue();
+}
+
+function periodOrderIndex(time) {
+  const i = PERIOD_DEFS.findIndex(p => p.time === time);
+  return i < 0 ? PERIOD_DEFS.length : i;
+}
+
+function sortPeriodList(list) {
+  return list.slice().sort((a, b) => periodOrderIndex(a) - periodOrderIndex(b));
+}
+
+function recordsInRange(recs, range) {
+  if (!range) return recs.slice();
+  return recs.filter(r => r.attendance_date >= range.start && r.attendance_date <= range.end);
+}
+
+function rangeLabelOf(range) {
+  return range ? `${fmtThaiDate(range.start)} - ${fmtThaiDate(range.end)}` : 'ทั้งหมด';
+}
+
+// รวมรายการเช็คชื่อเป็นแถวต่อวิชา
+function subjectRows(recs) {
+  const map = new Map();
+  recs.forEach(r => {
+    const name = r.attendance_subject || '(ไม่ระบุวิชา)';
+    let v = map.get(name);
+    if (!v) { v = { name, records: [], students: new Set(), periods: new Set(), days: new Set(), classes: new Set(), byClass: new Map() }; map.set(name, v); }
+    v.records.push(r);
+    v.students.add(String(r.attendance_student_id));
+    v.days.add(r.attendance_date);
+    const cls = r._cls || normalizeClass(r.attendance_student_class);
+    if (cls) {
+      v.classes.add(cls);
+      let c = v.byClass.get(cls);
+      if (!c) { c = { cls, total: 0, มา: 0, สาย: 0, ลา: 0, ขาด: 0 }; v.byClass.set(cls, c); }
+      c.total++;
+      if (c[r.attendance_status] !== undefined) c[r.attendance_status]++;
+    }
+    if (r.attendance_period) v.periods.add(r.attendance_period);
+  });
+
+  return [...map.values()].map(v => ({
+    name: v.name,
+    tally: statusTally(v.records),
+    students: v.students.size,
+    days: v.days.size,
+    classes: [...v.classes],
+    periods: sortPeriodList([...v.periods]),
+    byClass: [...v.byClass.values()].sort((a, b) => ALL_CLASSES.indexOf(a.cls) - ALL_CLASSES.indexOf(b.cls))
+  })).sort((a, b) => b.tally.total - a.tally.total || a.name.localeCompare(b.name, 'th'));
+}
+
+function statsEmpty(icon, title, sub) {
+  return `<div class="text-center py-10 bg-gradient-to-b from-rose-50 to-white rounded-2xl border border-rose-100">
+    <div class="text-6xl mb-3">${icon}</div>
+    <p class="text-rose-700 font-semibold">${esc(title)}</p>
+    ${sub ? `<p class="text-xs text-rose-600 mt-1">${esc(sub)}</p>` : ''}
+  </div>`;
+}
+
+function statsRangeChips(rep, extra) {
+  const chips = [];
+  chips.push(rep.mode === 'school'
+    ? (rep.cls ? `🎓 ${rep.clsLabel}` : '🏢 ทั้งโรงเรียน')
+    : rep.mode === 'activity' ? '🏢 ทั้งโรงเรียน (แยกตามชั้น)'
+    : `🎓 ${rep.clsLabel || 'ทุกชั้น'}`);
+  chips.push(`🗓️ ${rangeLabelOf(rep.range)}`);
+  (extra || []).forEach(t => chips.push(t));
+  return `<div class="flex flex-wrap gap-2 justify-center mb-5">
+    ${chips.map(c => `<span class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full font-medium">${esc(c)}</span>`).join('')}
+  </div>`;
+}
+
+function statsTotalRow(t, extraFirst) {
+  return `<tr class="bg-gray-50 font-bold text-gray-800">
+    <td class="px-3 py-2.5 border-b border-gray-200">${esc(extraFirst || 'รวมทั้งหมด')}</td>
+    <td class="px-3 py-2.5 border-b border-gray-200 text-center">${t.total}</td>
+    <td class="px-3 py-2.5 border-b border-gray-200 text-center text-green-700">${t.มา}</td>
+    <td class="px-3 py-2.5 border-b border-gray-200 text-center text-amber-700">${t.สาย}</td>
+    <td class="px-3 py-2.5 border-b border-gray-200 text-center text-blue-700">${t.ลา}</td>
+    <td class="px-3 py-2.5 border-b border-gray-200 text-center text-red-700">${t.ขาด}</td>
+    <td class="px-3 py-2.5 border-b border-gray-200 text-center">${t.rate.toFixed(1)}%</td>
+  </tr>`;
+}
+
+// ---- 3) รายห้องเรียน · รายวิชา ----
+function buildClassSubjectReport() {
+  const clsEl = document.getElementById('stats-class');
+  const cls = normalizeClass(clsEl?.value || '');
+  const clsLabel = clsEl && clsEl.value ? clsEl.value : '';
+  const range = getDateRange();
+  const students = cls ? allData.students.filter(s => normalizeClass(s.student_class) === cls) : [];
+  const recsAll = cls ? recordsInRange(allData.attendance.filter(r => attendanceMatchesClass(r, cls)), range) : [];
+  const subjectPick = document.getElementById('stats-subject')?.value || '';
+  const recs = subjectPick ? recsAll.filter(r => r.attendance_subject === subjectPick) : recsAll;
+  const rows = subjectRows(recs);
+  const summary = statusTally(recs);
+  const studentRows = subjectPick ? students.map(st => ({
+    id: st.student_id,
+    name: st.student_name,
+    tally: statusTally(recs.filter(r => String(r.attendance_student_id) === String(st.student_id)))
+  })).filter(x => x.tally.total > 0) : [];
+
+  return {
+    mode: 'classroom', view: 'subject', cls, clsLabel, range, students, rows, summary,
+    subject: subjectPick, subjectPick, studentRows,
+    totalRec: recs.length,
+    days: new Set(recs.map(r => r.attendance_date)).size,
+    checkedPeriods: new Set(recs.filter(r => r.attendance_period).map(r => r.attendance_period)).size,
+    generatedAt: new Date(),
+    metaLines: [
+      `ชั้นเรียน: ${clsLabel || '-'}`,
+      `ช่วงวันที่: ${rangeLabelOf(range)}`,
+      `รายวิชา/กิจกรรม: ${subjectPick ? subjectPick : rows.length + ' รายการ'}`,
+      `รายการเช็คชื่อ: ${recs.length} · อัตราการมา: ${summary.rate.toFixed(1)}%`
+    ],
+    sheets: [{
+      name: 'สรุปตามวิชา',
+      headers: ['รายวิชา / กิจกรรม', 'จำนวนครั้ง', 'นักเรียน (คน)', 'จำนวนวัน', 'ช่วงเวลาที่ใช้', 'มา', 'สาย', 'ลา', 'ขาด', 'รวม', '% มา'],
+      rows: rows.map(r => [r.name, r.tally.total, r.students, r.days, r.periods.join(', ') || '-',
+        r.tally.มา, r.tally.สาย, r.tally.ลา, r.tally.ขาด, r.tally.total,
+        pctText(r.tally.มา + r.tally.สาย, r.tally.total)])
+    }].concat(subjectPick ? [{
+      name: 'รายชื่อนักเรียน',
+      headers: ['เลขที่', 'ชื่อ-สกุล', 'มา', 'สาย', 'ลา', 'ขาด', 'รวม', '% มา'],
+      rows: studentRows.map(s => [s.id, s.name, s.tally.มา, s.tally.สาย, s.tally.ลา, s.tally.ขาด, s.tally.total,
+        pctText(s.tally.มา + s.tally.สาย, s.tally.total)])
+    }] : [])
+  };
+}
+
+function statsSubjectStudentTable(rep) {
+  if (!rep.studentRows || !rep.studentRows.length) return '';
+  const sum = rep.studentRows.reduce((a, s) => ({
+    total: a.total + s.tally.total,
+    มา: a.มา + s.tally.มา,
+    สาย: a.สาย + s.tally.สาย,
+    ลา: a.ลา + s.tally.ลา,
+    ขาด: a.ขาด + s.tally.ขาด
+  }), { total: 0, มา: 0, สาย: 0, ลา: 0, ขาด: 0 });
+
+  return `<h3 class="text-lg font-bold text-gray-800 mb-3">👥 นักเรียนในวิชา ${esc(rep.subject)}</h3>
+  <div class="table-scroll mb-6">
+    <table class="data-table" style="min-width:720px">
+      <thead><tr class="bg-gradient-to-r from-blue-600 to-indigo-500 text-white">
+        <th class="px-3 py-3">เลขที่</th>
+        <th class="px-3 py-3 text-left">ชื่อ-สกุล</th>
+        <th class="px-3 py-3">มา</th>
+        <th class="px-3 py-3">สาย</th>
+        <th class="px-3 py-3">ลา</th>
+        <th class="px-3 py-3">ขาด</th>
+        <th class="px-3 py-3">รวม</th>
+        <th class="px-3 py-3">% มา</th>
+      </tr></thead>
+      <tbody>
+      ${rep.studentRows.map(s => `<tr class="hover:bg-blue-50">
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(s.id)}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 font-semibold">${esc(s.name)}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${s.tally.มา}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${s.tally.สาย}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${s.tally.ลา}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${s.tally.ขาด}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${s.tally.total}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center font-semibold">${pctText(s.tally.มา + s.tally.สาย, s.tally.total)}</td>
+      </tr>`).join('')}
+      </tbody>
+      <tfoot><tr class="bg-gray-50 font-bold text-gray-800">
+        <td class="px-3 py-2.5" colspan="2">รวม</td>
+        <td class="px-3 py-2.5 text-center text-green-700">${sum.มา}</td>
+        <td class="px-3 py-2.5 text-center text-amber-700">${sum.สาย}</td>
+        <td class="px-3 py-2.5 text-center text-blue-700">${sum.ลา}</td>
+        <td class="px-3 py-2.5 text-center text-red-700">${sum.ขาด}</td>
+        <td class="px-3 py-2.5 text-center">${sum.total}</td>
+        <td class="px-3 py-2.5 text-center">${pctText(sum.มา + sum.สาย, sum.total)}</td>
+      </tr></tfoot>
+    </table>
+  </div>`;
+}
+
+function renderClassSubject(rep) {
+  const chips = statsRangeChips(rep, rep.subject ? ['📚 ' + rep.subject] : []);
+  if (!rep.cls) {
+    return chips + statsEmpty('🏫', 'กรุณาเลือกชั้นเรียนที่ช่อง “🎓 ชั้นเรียน” ด้านบน', 'ระบบจะแสดงสถิติแยกตามรายวิชาของห้องนั้น');
+  }
+  const s = rep.summary;
+  let html = chips + `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    ${statsMetricCard(rep.rows.length, '📚 วิชา/กิจกรรม', 'from-blue-500 to-indigo-600')}
+    ${statsMetricCard(rep.totalRec, '📝 รายการที่เช็ค', 'from-amber-400 to-orange-500')}
+    ${statsMetricCard(rep.days, '📅 จำนวนวัน', 'from-purple-500 to-fuchsia-600')}
+    ${statsMetricCard(s.rate.toFixed(1) + '%', '✅ อัตราการมา', 'from-emerald-500 to-teal-600')}
+  </div>`;
+
+  if (!rep.rows.length) {
+    return html + statsEmpty('📚', 'ยังไม่มีข้อมูลการเช็คชื่อตามตัวเลือกนี้', 'ลองเปลี่ยนช่วงวันที่ หรือเลือกชั้นเรียนอื่น');
+  }
+
+  html += `<h3 class="text-lg font-bold text-gray-800 mb-3">📚 สถิติรายวิชา — ${esc(rep.clsLabel)}</h3>
+  <div class="table-scroll mb-4">
+    <table class="data-table" style="min-width:980px">
+      <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+        <th class="px-3 py-3 text-left">รายวิชา / กิจกรรม</th>
+        <th class="px-3 py-3">จำนวนครั้ง</th>
+        <th class="px-3 py-3">นักเรียน</th>
+        <th class="px-3 py-3">วันที่</th>
+        <th class="px-3 py-3 text-left">ช่วงเวลาที่ใช้</th>
+        <th class="px-3 py-3">มา</th>
+        <th class="px-3 py-3">สาย</th>
+        <th class="px-3 py-3">ลา</th>
+        <th class="px-3 py-3">ขาด</th>
+        <th class="px-3 py-3">รวม</th>
+        <th class="px-3 py-3">% มา</th>
+      </tr></thead>
+      <tbody>
+      ${rep.rows.map(r => {
+        const t = r.tally;
+        return `<tr class="hover:bg-red-50">
+          <td class="px-3 py-2.5 border-b border-gray-100 font-semibold">${esc(r.name)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${t.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${r.students}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${r.days}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-xs">${esc(r.periods.join(', ') || '-')}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${t.มา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${t.สาย}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${t.ลา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${t.ขาด}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${t.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center font-semibold">${pctText(t.มา + t.สาย, t.total)}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+      <tfoot>
+        <tr class="bg-gray-50 font-bold text-gray-800">
+          <td class="px-3 py-2.5 border-b border-gray-200">รวมทั้งหมด</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center">${s.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center">${rep.students.length}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center">${rep.days}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-xs">${rep.checkedPeriods} ช่วงเวลา</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center text-green-700">${s.มา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center text-amber-700">${s.สาย}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center text-blue-700">${s.ลา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center text-red-700">${s.ขาด}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center">${s.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center">${s.rate.toFixed(1)}%</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  ${statsSubjectStudentTable(rep)}
+  <p class="text-xs text-gray-500">💡 “จำนวนครั้ง” = จำนวนรายการเช็คชื่อของวิชานั้น · “ช่วงเวลาที่ใช้” = ช่วงเวลาเช็คชื่อที่วิชานี้ถูกบันทึก · วิชาเดียวกันใช้ซ้ำได้หลายช่วงเวลา</p>`;
+  return html;
+}
+
+// ---- 4) รายห้องเรียน · กำหนดเอง ----
+function buildClassCustomReport() {
+  const clsEl = document.getElementById('stats-class');
+  const cls = normalizeClass(clsEl?.value || '');
+  const clsLabel = clsEl && clsEl.value ? clsEl.value : '';
+  const range = getDateRange();
+  const periodPick = document.getElementById('stats-period-pick')?.value || '';
+  const subjectPick = document.getElementById('stats-subject')?.value || '';
+  const students = cls ? allData.students.filter(s => normalizeClass(s.student_class) === cls) : [];
+  const recs = cls ? recordsInRange(allData.attendance.filter(r =>
+    attendanceMatchesClass(r, cls) &&
+    (!periodPick || r.attendance_period === periodPick) &&
+    (!subjectPick || r.attendance_subject === subjectPick)
+  ), range) : [];
+
+  const map = new Map();
+  recs.forEach(r => {
+    const key = [r.attendance_date, r.attendance_period || '', r.attendance_subject || ''].join('|');
+    let v = map.get(key);
+    if (!v) {
+      v = { date: r.attendance_date, period: r.attendance_period || '', subject: r.attendance_subject || '(ไม่ระบุวิชา)', records: [], students: new Set() };
+      map.set(key, v);
+    }
+    v.records.push(r);
+    v.students.add(String(r.attendance_student_id));
+  });
+
+  const rows = [...map.values()].map(v => ({
+    date: v.date,
+    period: v.period,
+    subject: v.subject,
+    tally: statusTally(v.records),
+    students: v.students.size,
+    classStudents: students.length
+  })).sort((a, b) =>
+    a.date.localeCompare(b.date) ||
+    periodOrderIndex(a.period) - periodOrderIndex(b.period) ||
+    a.subject.localeCompare(b.subject, 'th'));
+
+  const summary = statusTally(recs);
+  return {
+    mode: 'classroom', view: 'custom', cls, clsLabel, range, students, rows, summary,
+    periodPick, subjectPick,
+    totalRec: recs.length,
+    days: new Set(recs.map(r => r.attendance_date)).size,
+    checkedSlots: rows.length,
+    generatedAt: new Date(),
+    metaLines: [
+      `ชั้นเรียน: ${clsLabel || '-'}`,
+      `ช่วงวันที่: ${rangeLabelOf(range)}`,
+      `ช่วงเวลา: ${periodPick || 'ทั้งหมด'}`,
+      `รายวิชา: ${subjectPick || 'ทุกวิชา'}`,
+      `รายการเช็คชื่อ: ${recs.length} · อัตราการมา: ${summary.rate.toFixed(1)}%`
+    ],
+    sheets: [
+      {
+        name: 'สรุปตามช่วงเวลา',
+        headers: ['วันที่', 'ช่วงเวลา', 'รายวิชา / กิจกรรม', 'นักเรียน', 'มา', 'สาย', 'ลา', 'ขาด', 'รวม', '% มา', 'สถานะ'],
+        rows: rows.map(r => [fmtThaiDate(r.date), r.period || '-', r.subject, r.students,
+          r.tally.มา, r.tally.สาย, r.tally.ลา, r.tally.ขาด, r.tally.total,
+          pctText(r.tally.มา + r.tally.สาย, r.tally.total),
+          r.classStudents && r.students >= r.classStudents ? 'ครบ' : 'บางส่วน'])
+      },
+      {
+        name: 'รายละเอียดรายคน',
+        headers: ['วันที่', 'ช่วงเวลา', 'รายวิชา', 'เลขที่', 'ชื่อ-สกุล', 'สถานะ', 'หมายเหตุ'],
+        rows: recs.slice()
+          .sort((a, b) => (a.attendance_date || '').localeCompare(b.attendance_date || '') ||
+            periodOrderIndex(a.attendance_period) - periodOrderIndex(b.attendance_period))
+          .map(r => {
+            const st = findStudentRecord(r.attendance_student_id, r._cls || r.attendance_student_class);
+            return [fmtThaiDate(r.attendance_date), r.attendance_period || '-', r.attendance_subject || '-',
+              r.attendance_student_id, st ? st.student_name : '-', r.attendance_status, r.attendance_notes || ''];
+          })
+      }
+    ]
+  };
+}
+
+function renderClassCustom(rep) {
+  const extra = [];
+  if (rep.periodPick) extra.push('⏱ ' + rep.periodPick);
+  if (rep.subjectPick) extra.push('📚 ' + rep.subjectPick);
+  const chips = statsRangeChips(rep, extra);
+  if (!rep.cls) {
+    return chips + statsEmpty('✏️', 'กรุณาเลือกชั้นเรียนก่อนสร้างรายงานกำหนดเอง', 'เลือกชั้นเรียน แล้วกำหนดช่วงวันที่ / ช่วงเวลา / วิชา ได้เอง');
+  }
+  const s = rep.summary;
+  let html = chips + `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    ${statsMetricCard(rep.days, '📅 จำนวนวัน', 'from-purple-500 to-fuchsia-600')}
+    ${statsMetricCard(rep.checkedSlots, '⏱ ช่วงที่เช็ค', 'from-blue-500 to-indigo-600')}
+    ${statsMetricCard(rep.totalRec, '📝 รายการ', 'from-amber-400 to-orange-500')}
+    ${statsMetricCard(s.rate.toFixed(1) + '%', '✅ อัตราการมา', 'from-emerald-500 to-teal-600')}
+  </div>`;
+
+  if (!rep.rows.length) {
+    return html + statsEmpty('🗓️', 'ไม่พบข้อมูลตามเงื่อนไขที่กำหนด', 'ลองขยายช่วงวันที่ หรือเลือก “ทุกช่วงเวลา / ทุกวิชา”');
+  }
+
+  html += `<h3 class="text-lg font-bold text-gray-800 mb-3">✏️ รายงานกำหนดเอง — ${esc(rep.clsLabel)} (${esc(rangeLabelOf(rep.range))})</h3>
+  <div class="table-scroll mb-4">
+    <table class="data-table" style="min-width:900px">
+      <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+        <th class="px-3 py-3 text-left">วันที่</th>
+        <th class="px-3 py-3 text-left">ช่วงเวลา</th>
+        <th class="px-3 py-3 text-left">รายวิชา / กิจกรรม</th>
+        <th class="px-3 py-3">นักเรียน</th>
+        <th class="px-3 py-3">มา</th>
+        <th class="px-3 py-3">สาย</th>
+        <th class="px-3 py-3">ลา</th>
+        <th class="px-3 py-3">ขาด</th>
+        <th class="px-3 py-3">รวม</th>
+        <th class="px-3 py-3">สถานะ</th>
+      </tr></thead>
+      <tbody>
+      ${rep.rows.map(r => {
+        const t = r.tally;
+        const full = r.classStudents && r.students >= r.classStudents;
+        return `<tr class="hover:bg-red-50">
+          <td class="px-3 py-2.5 border-b border-gray-100 whitespace-nowrap">${esc(fmtThaiDate(r.date))}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 whitespace-nowrap font-semibold">${esc(r.period || '-')}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100">${esc(r.subject)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">${r.students}/${r.classStudents || 0}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${t.มา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${t.สาย}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${t.ลา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${t.ขาด}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${t.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">
+            <span class="px-2 py-1 rounded-full text-xs font-semibold ${full ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}">${full ? '✅ ครบ' : '⚠️ บางส่วน'}</span>
+          </td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-gray-500">💡 กำหนดเงื่อนไขได้จาก “ช่วงเวลา” (ช่วงวันที่) · “ชั้นเรียน” · “รายวิชา” และ “เฉพาะช่วงเวลา” ด้านบน แล้วกดส่งออกเพื่อรับไฟล์ Excel/Word ของรายงานนี้</p>`;
+  return html;
+}
+
+// ---- 5) ทั้งโรงเรียน · รายวิชา ----
+function buildSchoolSubjectReport() {
+  const clsEl = document.getElementById('stats-class');
+  const cls = normalizeClass(clsEl?.value || '');
+  const clsLabel = clsEl && clsEl.value ? clsEl.value : 'ทุกชั้น';
+  const range = getDateRange();
+  const recs = recordsInRange(cls ? allData.attendance.filter(r => attendanceMatchesClass(r, cls)) : allData.attendance, range);
+  const rows = subjectRows(recs);
+  const summary = statusTally(recs);
+  const classes = new Set();
+  recs.forEach(r => {
+    const cls = r._cls || normalizeClass(r.attendance_student_class);
+    if (cls) classes.add(cls);
+  });
+
+  return {
+    mode: 'school', view: 'subject', range, rows, summary, cls, clsLabel,
+    totalRec: recs.length,
+    days: new Set(recs.map(r => r.attendance_date)).size,
+    classes: [...classes].sort((a, b) => ALL_CLASSES.indexOf(a) - ALL_CLASSES.indexOf(b)),
+    generatedAt: new Date(),
+    metaLines: [
+      `ขอบเขต: ${cls ? 'ชั้นเรียน ' + clsLabel : 'ทั้งโรงเรียน'}`,
+      `ช่วงวันที่: ${rangeLabelOf(range)}`,
+      `รายวิชา/กิจกรรม: ${rows.length} รายการ · ชั้นที่มีข้อมูล: ${classes.size}`,
+      `รายการเช็คชื่อ: ${recs.length} · อัตราการมา: ${summary.rate.toFixed(1)}%`
+    ],
+    sheets: [
+      {
+        name: 'สรุปตามวิชา',
+        headers: ['รายวิชา / กิจกรรม', 'ชั้นที่เช็ค', 'จำนวนครั้ง', 'นักเรียน (คน)', 'มา', 'สาย', 'ลา', 'ขาด', 'รวม', '% มา'],
+        rows: rows.map(r => [r.name, r.classes.join(', ') || '-', r.tally.total, r.students,
+          r.tally.มา, r.tally.สาย, r.tally.ลา, r.tally.ขาด, r.tally.total,
+          pctText(r.tally.มา + r.tally.สาย, r.tally.total)])
+      },
+      {
+        name: 'แยกตามชั้น',
+        headers: ['รายวิชา / กิจกรรม', 'ชั้น', 'รวม', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+        rows: rows.flatMap(r => r.byClass.map(c => [r.name, c.cls, c.total, c.มา, c.สาย, c.ลา, c.ขาด,
+          pctText(c.มา + c.สาย, c.total)]))
+      }
+    ]
+  };
+}
+
+function renderSchoolSubject(rep) {
+  const chips = statsRangeChips(rep, []);
+  const s = rep.summary;
+  let html = chips + `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    ${statsMetricCard(rep.rows.length, '📚 วิชา/กิจกรรม', 'from-blue-500 to-indigo-600')}
+    ${statsMetricCard(rep.classes.length + '/' + ALL_CLASSES.length, '🏫 ชั้นที่มีข้อมูล', 'from-purple-500 to-fuchsia-600')}
+    ${statsMetricCard(rep.totalRec, '📝 รายการเช็ค', 'from-amber-400 to-orange-500')}
+    ${statsMetricCard(s.rate.toFixed(1) + '%', '✅ อัตราการมา', 'from-emerald-500 to-teal-600')}
+  </div>`;
+
+  if (!rep.rows.length) {
+    return html + statsEmpty('📚', 'ยังไม่มีข้อมูลการเช็คชื่อตามช่วงเวลานี้', 'ลองเปลี่ยนช่วงวันที่ด้านบน');
+  }
+
+  const missing = ALL_CLASSES.filter(c => rep.classes.indexOf(normalizeClass(c)) < 0);
+  if (missing.length) {
+    html += `<div class="mb-5 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+      <div class="font-bold text-amber-800 mb-2">⚠️ ชั้นที่ยังไม่มีข้อมูลในช่วงเวลานี้</div>
+      <div class="flex flex-wrap gap-2">
+        ${missing.map(c => `<span class="bg-white border border-amber-200 text-amber-800 font-semibold text-sm px-3 py-1.5 rounded-full">${esc(c)}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  html += `<h3 class="text-lg font-bold text-gray-800 mb-3">📚 สถิติรายวิชาทั้งโรงเรียน — ${esc(rangeLabelOf(rep.range))}</h3>
+  <div class="table-scroll mb-4">
+    <table class="data-table" style="min-width:960px">
+      <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+        <th class="px-3 py-3 text-left">รายวิชา / กิจกรรม</th>
+        <th class="px-3 py-3 text-left">ชั้นที่เช็ค</th>
+        <th class="px-3 py-3">จำนวนครั้ง</th>
+        <th class="px-3 py-3">นักเรียน</th>
+        <th class="px-3 py-3">มา</th>
+        <th class="px-3 py-3">สาย</th>
+        <th class="px-3 py-3">ลา</th>
+        <th class="px-3 py-3">ขาด</th>
+        <th class="px-3 py-3">รวม</th>
+        <th class="px-3 py-3">% มา</th>
+      </tr></thead>
+      <tbody>
+      ${rep.rows.map(r => {
+        const t = r.tally;
+        return `<tr class="hover:bg-red-50">
+          <td class="px-3 py-2.5 border-b border-gray-100 font-semibold">${esc(r.name)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-xs">${esc(r.classes.join(', ')) || '-'}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${t.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${r.students}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${t.มา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${t.สาย}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${t.ลา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${t.ขาด}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${t.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center font-semibold">${pctText(t.มา + t.สาย, t.total)}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+      <tfoot>
+        <tr class="bg-gray-50 font-bold text-gray-800">
+          <td class="px-3 py-2.5 border-b border-gray-200">รวมทั้งหมด</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-xs">${rep.classes.length} ชั้น</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center">${s.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center">-</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center text-green-700">${s.มา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center text-amber-700">${s.สาย}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center text-blue-700">${s.ลา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center text-red-700">${s.ขาด}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center">${s.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-200 text-center">${s.rate.toFixed(1)}%</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  <p class="text-xs text-gray-500">💡 สถิติรายวิชารวมทุกชั้นเรียนในช่วงวันที่เลือก · ไฟล์ส่งออกมีทั้งชีต “สรุปตามวิชา” และ “แยกตามชั้น”</p>`;
+  return html;
+}
+
+/* ────────────────────────────────────────────────
+   สถิติอันดับการมาเรียน: Top 10 + เกณฑ์ร้อยละ 80
+   ──────────────────────────────────────────────── */
+const ATTENDANCE_PASS_RATE = 80;
+
+function buildAttendanceRankingReport() {
+  const clsEl = document.getElementById('stats-class');
+  const cls = normalizeClass(clsEl?.value || '');
+  const clsLabel = clsEl && clsEl.value ? clsEl.value : 'ทุกชั้น';
+  const subject = document.getElementById('stats-subject')?.value || '';
+  const range = getDateRange();
+
+  let recs = recordsInRange(allData.attendance, range);
+  if (cls) recs = recs.filter(r => attendanceMatchesClass(r, cls));
+  if (subject) recs = recs.filter(r => r.attendance_subject === subject);
+
+  const map = new Map();
+  recs.forEach(r => {
+    const studentCls = r._cls || normalizeClass(r.attendance_student_class);
+    const key = studentCls + '|' + String(r.attendance_student_id);
+    let v = map.get(key);
+    if (!v) { v = { cls: studentCls, id: String(r.attendance_student_id), recs: [] }; map.set(key, v); }
+    v.recs.push(r);
+  });
+
+  const students = [...map.values()].map(v => {
+    const st = findStudentRecord(v.id, v.cls);
+    const t = statusTally(v.recs);
+    return {
+      cls: v.cls,
+      id: v.id,
+      name: st ? st.student_name : '(ไม่พบชื่อในทะเบียน)',
+      tally: t,
+      rate: t.rate,
+      present: t.มา + t.สาย,
+      days: new Set(v.recs.map(r => r.attendance_date)).size
+    };
+  });
+
+  const ranked = students.slice().sort((a, b) =>
+    b.rate - a.rate || b.present - a.present || b.tally.total - a.tally.total ||
+    a.cls.localeCompare(b.cls, 'th'));
+  const top10 = ranked.slice(0, 10);
+  const below = students.filter(s => s.rate < ATTENDANCE_PASS_RATE)
+    .sort((a, b) => a.rate - b.rate || b.tally.ขาด - a.tally.ขาด);
+  const passed = students.filter(s => s.rate >= ATTENDANCE_PASS_RATE)
+    .sort((a, b) => b.rate - a.rate || b.present - a.present || a.cls.localeCompare(b.cls, 'th'));
+  const avgRate = students.length ? students.reduce((a, s) => a + s.rate, 0) / students.length : 0;
+  const scopedStudents = cls ? allData.students.filter(s => normalizeClass(s.student_class) === cls) : allData.students;
+
+  return {
+    mode: 'ranking',
+    cls, clsLabel, subject, range, students, ranked, top10, below, passed,
+    totalRec: recs.length,
+    avgRate,
+    generatedAt: new Date(),
+    metaLines: [
+      `ขอบเขต: ${cls ? 'ชั้นเรียน ' + clsLabel : 'ทั้งโรงเรียน'}`,
+      `รายวิชา: ${subject || 'ทุกวิชา'}`,
+      `ช่วงวันที่: ${rangeLabelOf(range)}`,
+      `นักเรียนที่ถูกเช็คชื่อ: ${students.length}/${scopedStudents.length} คน · รายการเช็คชื่อ: ${recs.length}`,
+      `ผ่านเกณฑ์ ${ATTENDANCE_PASS_RATE}%: ${passed.length} คน · ต่ำกว่าเกณฑ์: ${below.length} คน`
+    ],
+    sheets: [
+      {
+        name: 'Top 10',
+        headers: ['อันดับ', 'ชั้น', 'เลขที่', 'ชื่อ-สกุล', 'วันที่มา', 'มา', 'สาย', 'ลา', 'ขาด', 'รวม', '% มาเรียน', 'เกณฑ์'],
+        rows: top10.map((s, i) => [i + 1, s.cls, s.id, s.name, s.days, s.tally.มา, s.tally.สาย, s.tally.ลา,
+          s.tally.ขาด, s.tally.total, s.rate.toFixed(1),
+          s.rate >= ATTENDANCE_PASS_RATE ? 'ผ่าน' : 'ต่ำกว่าเกณฑ์'])
+      },
+      {
+        name: '80% ขึ้นไป',
+        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', 'วันที่มา', 'มา', 'สาย', 'ลา', 'ขาด', 'รวม', '% มาเรียน'],
+        rows: passed.map(s => [s.cls, s.id, s.name, s.days, s.tally.มา, s.tally.สาย, s.tally.ลา, s.tally.ขาด,
+          s.tally.total, s.rate.toFixed(1)])
+      },
+      {
+        name: 'ต่ำกว่า 80%',
+        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', 'วันที่มา', 'มา', 'สาย', 'ลา', 'ขาด', 'รวม', '% มาเรียน'],
+        rows: below.map(s => [s.cls, s.id, s.name, s.days, s.tally.มา, s.tally.สาย, s.tally.ลา, s.tally.ขาด,
+          s.tally.total, s.rate.toFixed(1)])
+      }
+    ]
+  };
+}
+
+function statsRateBadge(rate) {
+  const ok = rate >= ATTENDANCE_PASS_RATE;
+  return `<span class="px-2 py-1 rounded-full text-xs font-semibold ${ok ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${ok ? '✅ ผ่าน' : '⚠️ ต่ำกว่าเกณฑ์'}</span>`;
+}
+
+function statsRankingTable(list, opts) {
+  const withRank = !!(opts && opts.rank);
+  return `<div class="table-scroll mb-4">
+    <table class="data-table" style="min-width:${withRank ? 900 : 860}px">
+      <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+        ${withRank ? '<th class="px-3 py-3">อันดับ</th>' : ''}
+        <th class="px-3 py-3 text-left">ชื่อ-สกุล</th>
+        <th class="px-3 py-3">ชั้น</th>
+        <th class="px-3 py-3">เลขที่</th>
+        <th class="px-3 py-3">วันที่มา</th>
+        <th class="px-3 py-3">มา</th>
+        <th class="px-3 py-3">สาย</th>
+        <th class="px-3 py-3">ลา</th>
+        <th class="px-3 py-3">ขาด</th>
+        <th class="px-3 py-3">รวม</th>
+        <th class="px-3 py-3">% มาเรียน</th>
+        <th class="px-3 py-3">เกณฑ์ 80%</th>
+      </tr></thead>
+      <tbody>
+      ${list.map((s, i) => {
+        const medal = withRank ? (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1) : '';
+        return `<tr class="hover:bg-red-50">
+          ${withRank ? `<td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${medal}</td>` : ''}
+          <td class="px-3 py-2.5 border-b border-gray-100 font-semibold">${esc(s.name)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">${esc(s.cls)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(s.id)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${s.days}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${s.tally.มา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${s.tally.สาย}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${s.tally.ลา}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${s.tally.ขาด}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${s.tally.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold ${s.rate >= ATTENDANCE_PASS_RATE ? 'text-green-700' : 'text-red-700'}">${s.rate.toFixed(1)}%</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">${statsRateBadge(s.rate)}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderAttendanceRanking(rep) {
+  const extra = [];
+  if (rep.subject) extra.push('📚 ' + rep.subject);
+  const chips = statsRangeChips(rep, extra);
+
+  let html = chips + `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    ${statsMetricCard(rep.students.length, '👥 นักเรียนที่ถูกประเมิน', 'from-blue-500 to-indigo-600')}
+    ${statsMetricCard(rep.passed.length, `✅ ผ่านเกณฑ์ ${ATTENDANCE_PASS_RATE}%`, 'from-emerald-500 to-teal-600')}
+    ${statsMetricCard(rep.below.length, `⚠️ ต่ำกว่า ${ATTENDANCE_PASS_RATE}%`, 'from-rose-500 to-red-600')}
+    ${statsMetricCard(rep.avgRate.toFixed(1) + '%', '📊 อัตราเฉลี่ย', 'from-amber-400 to-orange-500')}
+  </div>
+  <p class="text-xs text-gray-500 mb-5">💡 “วันที่มา” = จำนวนวันที่มีการเช็คชื่อของนักเรียนคนนั้น · % มาเรียน = (มา + สาย) ÷ รายการที่ถูกเช็คชื่อทั้งหมด · เกณฑ์เปรียบเทียบคือ <b>ร้อยละ ${ATTENDANCE_PASS_RATE} ของวันมาเรียน</b></p>`;
+
+  if (!rep.students.length) {
+    return html + statsEmpty('🏅', 'ยังไม่มีข้อมูลการเช็คชื่อตามตัวเลือกนี้', 'ลองเปลี่ยนชั้นเรียน วิชา หรือช่วงวันที่ด้านบน');
+  }
+
+  html += `<h3 class="text-lg font-bold text-gray-800 mb-3">🥇 ผู้เข้าเรียน Top 10</h3>`;
+  html += statsRankingTable(rep.top10, { rank: true });
+
+  html += `<h3 class="text-lg font-bold text-gray-800 mt-6 mb-3">✅ ผู้มาเรียนตั้งแต่ ${ATTENDANCE_PASS_RATE}% ขึ้นไป <span class="text-sm font-normal text-gray-500">(${rep.passed.length} คน)</span></h3>`;
+  html += rep.passed.length
+    ? `<div class="table-scroll mb-4" style="max-height:620px;overflow:auto">${statsRankingTable(rep.passed).replace('<div class="table-scroll mb-4">', '').replace(/<\/div>$/, '')}</div>`
+    : `<div class="mb-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-4 text-sm">ยังไม่มีนักเรียนที่ผ่านเกณฑ์ ${ATTENDANCE_PASS_RATE}% ในเงื่อนไขนี้</div>`;
+
+  html += `<h3 class="text-lg font-bold text-gray-800 mt-6 mb-3">⚠️ ผู้มาเรียนต่ำกว่าเกณฑ์ ${ATTENDANCE_PASS_RATE}% <span class="text-sm font-normal text-gray-500">(${rep.below.length} คน)</span></h3>`;
+  html += rep.below.length
+    ? statsRankingTable(rep.below)
+    : `<div class="mb-4 bg-green-50 border border-green-200 text-green-800 rounded-2xl p-4 text-sm">🎉 ไม่มีนักเรียนที่ต่ำกว่าเกณฑ์ ${ATTENDANCE_PASS_RATE}% ในเงื่อนไขนี้</div>`;
+
+  html += `<p class="text-xs text-gray-500 mt-3">💡 ไฟล์ส่งออกมี 3 ชีต: “Top 10” · “80% ขึ้นไป” และ “ต่ำกว่า 80%” · ใช้ “วิชา” และ “ช่วงเวลา (กำหนดเอง)” ด้านบนเพื่อเจาะดูเป็นรายวิชา/ช่วงวันที่ได้</p>`;
+  return html;
+}
+
+/* ────────────────────────────────────────────────
+   สถิติกิจกรรมประจำ (ปรนนิบัติสถานที่ / สติเคารพฯ / MT / PT / AAR)
+   แสดงรายชื่อนักเรียนชุดเดียวกัน แต่แยกตารางตามชั้นเรียน
+   ──────────────────────────────────────────────── */
+const ACTIVITY_DEFS = [
+  { key: 'ปรนนิบัติสถานที่', test: s => s.indexOf('ปรนนิบัติ') >= 0 },
+  { key: 'สติเคารพฯ', test: s => s.indexOf('สติเคารพ') >= 0 },
+  { key: 'MT (Mind training)', test: s => /(^|[^a-z])mt([^a-z]|$)|mind\s*training/i.test(s) },
+  { key: 'PT (Personality talk)', test: s => /(^|[^a-z])pt([^a-z]|$)|personality\s*talk/i.test(s) },
+  { key: 'AAR', test: s => /(^|[^a-z])aar([^a-z]|$)/i.test(s) }
+];
+
+const ACTIVITY_TONES = ['from-sky-500 to-blue-600', 'from-violet-500 to-purple-600',
+  'from-emerald-500 to-teal-600', 'from-amber-400 to-orange-500', 'from-rose-500 to-pink-600'];
+
+function activityOf(subject) {
+  const s = String(subject || '');
+  return ACTIVITY_DEFS.find(a => a.test(s)) || null;
+}
+
+function activityClassOrder(c) {
+  const i = ALL_CLASSES.indexOf(c);
+  return i < 0 ? ALL_CLASSES.length : i;
+}
+
+function buildActivityReport() {
+  const range = getDateRange();
+  const recs = recordsInRange(allData.attendance, range).filter(r => activityOf(r.attendance_subject));
+
+  const students = new Map();   // 'ชั้น|เลขที่' -> {cls, id, byAct, recs}
+  const classAct = new Map();   // 'ชั้น|กิจกรรม' -> recs[]
+  const actRecs = new Map();    // กิจกรรม -> recs[]
+
+  recs.forEach(r => {
+    const def = activityOf(r.attendance_subject);
+    const cls = r._cls || normalizeClass(r.attendance_student_class);
+    const key = cls + '|' + String(r.attendance_student_id);
+    let v = students.get(key);
+    if (!v) { v = { cls, id: String(r.attendance_student_id), byAct: new Map(), recs: [] }; students.set(key, v); }
+    if (!v.byAct.has(def.key)) v.byAct.set(def.key, []);
+    v.byAct.get(def.key).push(r);
+    v.recs.push(r);
+
+    const ck = cls + '|' + def.key;
+    if (!classAct.has(ck)) classAct.set(ck, []);
+    classAct.get(ck).push(r);
+
+    if (!actRecs.has(def.key)) actRecs.set(def.key, []);
+    actRecs.get(def.key).push(r);
+  });
+
+  const groups = new Map();
+  [...students.values()].forEach(v => {
+    const st = findStudentRecord(v.id, v.cls);
+    const acts = {};
+    ACTIVITY_DEFS.forEach(a => { acts[a.key] = statusTally(v.byAct.get(a.key) || []); });
+    if (!groups.has(v.cls)) groups.set(v.cls, []);
+    groups.get(v.cls).push({
+      cls: v.cls, id: v.id,
+      name: st ? st.student_name : '(ไม่พบชื่อในทะเบียน)',
+      acts, tally: statusTally(v.recs)
+    });
+  });
+
+  const groupList = [...groups.entries()]
+    .map(([cls, list]) => ({
+      cls,
+      students: list.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }))
+    }))
+    .sort((a, b) => activityClassOrder(a.cls) - activityClassOrder(b.cls) || a.cls.localeCompare(b.cls, 'th'));
+
+  const summary = ACTIVITY_DEFS.map(a => {
+    const list = actRecs.get(a.key) || [];
+    return { key: a.key, tally: statusTally(list), days: new Set(list.map(r => r.attendance_date)).size };
+  });
+
+  const classActRows = [...classAct.entries()].map(([ck, list]) => {
+    const sep = ck.lastIndexOf('|');
+    return { cls: ck.slice(0, sep), act: ck.slice(sep + 1), tally: statusTally(list) };
+  }).sort((a, b) => activityClassOrder(a.cls) - activityClassOrder(b.cls) ||
+    ACTIVITY_DEFS.findIndex(x => x.key === a.act) - ACTIVITY_DEFS.findIndex(x => x.key === b.act));
+
+  return {
+    mode: 'activity',
+    range,
+    groupList, summary, classActRows,
+    totalRec: recs.length,
+    generatedAt: new Date(),
+    metaLines: [
+      'ขอบเขต: ทั้งโรงเรียน (แยกตารางตามชั้นเรียน)',
+      `กิจกรรม: ${ACTIVITY_DEFS.map(a => a.key).join(' · ')}`,
+      `ช่วงวันที่: ${rangeLabelOf(range)}`,
+      `รายการเช็คชื่อกิจกรรม: ${recs.length} · ชั้นที่มีข้อมูล: ${groupList.length}`,
+      ...summary.map(s => `${s.key}: ${s.tally.total} ครั้ง / ${s.days} วัน · อัตราการมา ${s.tally.rate.toFixed(1)}%`)
+    ],
+    sheets: [
+      {
+        name: 'สรุปกิจกรรม',
+        headers: ['กิจกรรม', 'จำนวนครั้ง', 'จำนวนวัน', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+        rows: summary.map(s => [s.key, s.tally.total, s.days, s.tally.มา, s.tally.สาย,
+          s.tally.ลา, s.tally.ขาด, s.tally.rate.toFixed(1)])
+      },
+      {
+        name: 'แยกตามชั้น',
+        headers: ['ชั้น', 'กิจกรรม', 'จำนวนครั้ง', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+        rows: classActRows.map(r => [r.cls, r.act, r.tally.total, r.tally.มา, r.tally.สาย,
+          r.tally.ลา, r.tally.ขาด, r.tally.rate.toFixed(1)])
+      },
+      {
+        name: 'รายชื่อนักเรียน',
+        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', ...ACTIVITY_DEFS.map(a => a.key), 'รวม', '% มา'],
+        rows: groupList.flatMap(g => g.students.map(s => [
+          s.cls, s.id, s.name,
+          ...ACTIVITY_DEFS.map(a => s.acts[a.key].total
+            ? `${s.acts[a.key].มา + s.acts[a.key].สาย}/${s.acts[a.key].total}` : '-'),
+          `${s.tally.มา + s.tally.สาย}/${s.tally.total}`, s.tally.rate.toFixed(1)
+        ]))
+      }
+    ]
+  };
+}
+
+function activityCell(t) {
+  if (!t || !t.total) return '<span class="text-gray-300">–</span>';
+  const ok = t.rate >= ATTENDANCE_PASS_RATE;
+  return `<span class="font-semibold ${ok ? 'text-green-700' : 'text-red-600'}">${t.มา + t.สาย}/${t.total}</span>
+    <span class="block text-[11px] ${ok ? 'text-green-600' : 'text-red-500'}">${t.rate.toFixed(0)}%</span>`;
+}
+
+function renderActivity(rep) {
+  const chips = statsRangeChips(rep, []);
+
+  let html = chips + `<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+    ${rep.summary.map((s, i) => statsMetricCard(
+      s.tally.total ? s.tally.rate.toFixed(1) + '%' : '–',
+      `${s.key}<br><span class="text-xs font-normal opacity-90">${s.tally.total} ครั้ง · ${s.days} วัน</span>`,
+      ACTIVITY_TONES[i % ACTIVITY_TONES.length])).join('')}
+  </div>
+  <p class="text-xs text-gray-500 mb-5">💡 ตารางแยกตามชั้นเรียน แต่ละช่องคือ <b>จำนวนครั้งที่มา/ทั้งหมด</b> (มา + สาย นับเป็นมา) · % ต่อท้ายคืออัตราการมา · เลือก “✏️ กำหนดเอง” ในช่องช่วงเวลาเพื่อดูตามช่วงวันที่ต้องการได้</p>`;
+
+  if (!rep.groupList.length) {
+    return html + statsEmpty('🎯', 'ยังไม่มีข้อมูลกิจกรรมในช่วงที่เลือก', 'ลองเปลี่ยนช่วงเวลา หรือตรวจสอบชื่อกิจกรรมที่บันทึกไว้');
+  }
+
+  rep.groupList.forEach(g => {
+    const totals = {};
+    ACTIVITY_DEFS.forEach(a => { totals[a.key] = { total: 0, present: 0, มา: 0, สาย: 0, ลา: 0, ขาด: 0 }; });
+    const all = { total: 0, present: 0 };
+    g.students.forEach(s => {
+      ACTIVITY_DEFS.forEach(a => {
+        const t = s.acts[a.key];
+        totals[a.key].total += t.total;
+        totals[a.key].present += t.มา + t.สาย;
+        totals[a.key].มา += t.มา; totals[a.key].สาย += t.สาย;
+        totals[a.key].ลา += t.ลา; totals[a.key].ขาด += t.ขาด;
+      });
+      all.total += s.tally.total;
+      all.present += s.tally.มา + s.tally.สาย;
+    });
+
+    html += `<h3 class="text-lg font-bold text-gray-800 mb-3">🏫 ชั้น ${esc(g.cls)}
+      <span class="text-sm font-normal text-gray-500">(${g.students.length} คน)</span></h3>
+    <div class="table-scroll mb-6">
+      <table class="data-table" style="min-width:${720 + ACTIVITY_DEFS.length * 110}px">
+        <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+          <th class="px-3 py-3">เลขที่</th>
+          <th class="px-3 py-3 text-left">ชื่อ-สกุล</th>
+          ${ACTIVITY_DEFS.map(a => `<th class="px-3 py-3">${esc(a.key)}</th>`).join('')}
+          <th class="px-3 py-3">รวม</th>
+          <th class="px-3 py-3">% มา</th>
+        </tr></thead>
+        <tbody>
+        ${g.students.map(s => `<tr class="hover:bg-red-50">
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(s.id)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 font-semibold">${esc(s.name)}</td>
+          ${ACTIVITY_DEFS.map(a => `<td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">${activityCell(s.acts[a.key])}</td>`).join('')}
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${s.tally.มา + s.tally.สาย}/${s.tally.total}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold ${s.tally.rate >= ATTENDANCE_PASS_RATE ? 'text-green-700' : 'text-red-700'}">${s.tally.rate.toFixed(1)}%</td>
+        </tr>`).join('')}
+        </tbody>
+        <tfoot><tr class="bg-gray-50 font-bold text-gray-800">
+          <td class="px-3 py-2.5" colspan="2">รวมทั้งชั้น</td>
+          ${ACTIVITY_DEFS.map(a => `<td class="px-3 py-2.5 text-center whitespace-nowrap">${totals[a.key].present}/${totals[a.key].total}
+            <span class="block text-[11px] font-normal text-gray-500">${totals[a.key].total ? ((totals[a.key].present / totals[a.key].total) * 100).toFixed(0) + '%' : '–'}</span></td>`).join('')}
+          <td class="px-3 py-2.5 text-center">${all.present}/${all.total}</td>
+          <td class="px-3 py-2.5 text-center">${all.total ? ((all.present / all.total) * 100).toFixed(1) + '%' : '–'}</td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+  });
+
+  html += `<p class="text-xs text-gray-500 mt-3">💡 ไฟล์ส่งออกมี 3 ชีต: “สรุปกิจกรรม” · “แยกตามชั้น” · “รายชื่อนักเรียน”</p>`;
+  return html;
+}
+
 function loadStatistics() {
   const c = document.getElementById('statistics-content');
+  if (statsMode === 'activity') {
+    const actRep = buildActivityReport();
+    lastStatsReport = actRep;
+    if (!c) return;
+    c.innerHTML = renderActivity(actRep);
+    return;
+  }
+  if (statsMode === 'ranking') {
+    const rankRep = buildAttendanceRankingReport();
+    lastStatsReport = rankRep;
+    if (!c) return;
+    c.innerHTML = renderAttendanceRanking(rankRep);
+    return;
+  }
   if (statsMode === 'classroom' || statsMode === 'school') {
-    const rep = statsMode === 'classroom' ? buildClassTimetableReport() : buildSchoolDayReport();
+    const view = statsViewNow();
+    let rep, html;
+    if (statsMode === 'classroom') {
+      if (view === 'subject') { rep = buildClassSubjectReport(); html = renderClassSubject(rep); }
+      else if (view === 'custom') { rep = buildClassCustomReport(); html = renderClassCustom(rep); }
+      else { rep = buildClassTimetableReport(); html = renderClassTimetable(rep); }
+    } else if (view === 'subject') {
+      rep = buildSchoolSubjectReport(); html = renderSchoolSubject(rep);
+    } else {
+      rep = buildSchoolDayReport(); html = renderSchoolDay(rep);
+    }
+    rep.view = rep.view || view;
     lastStatsReport = rep;
     if (!c) return;
-    c.innerHTML = statsMode === 'classroom' ? renderClassTimetable(rep) : renderSchoolDay(rep);
+    c.innerHTML = html;
     return;
   }
   const rep = buildStatsReport();
@@ -2920,10 +4102,21 @@ function statsFileName(rep, ext) {
   if (rep.mode === 'student' && rep.student) {
     parts.push('รายบุคคล', `${rep.student.student_id}_${rep.student.student_name}`);
   } else {
-    parts.push(rep.clsLabel || 'ทุกชั้น');
+    if (rep.mode === 'activity') {
+      parts.push('กิจกรรม');
+    } else if (rep.mode === 'school') {
+      parts.push('ทั้งโรงเรียน');
+      if (rep.cls) parts.push(rep.clsLabel);
+    } else {
+      parts.push(rep.mode === 'ranking' ? 'อันดับการมาเรียน' : (rep.clsLabel || 'ทุกชั้น'));
+    }
+    if (rep.view === 'subject') parts.push('รายวิชา');
+    else if (rep.view === 'custom') parts.push('กำหนดเอง');
+    else if (rep.mode === 'classroom' || rep.mode === 'school') parts.push('ช่วงเวลา');
   }
-  parts.push(rep.subject || 'ทุกวิชา');
-  parts.push(rep.range ? `${rep.range.start}_ถึง_${rep.range.end}` : 'ทั้งหมด');
+  if (rep.day) parts.push(rep.day);
+  else parts.push(rep.range ? `${rep.range.start}_ถึง_${rep.range.end}` : 'ทั้งหมด');
+  if (rep.subject) parts.push(rep.subject);
   const name = parts.join('_').replace(/[\\/:*?"<>|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
   return `${name}.${ext}`;
 }
@@ -2932,10 +4125,6 @@ function exportStats(kind) {
   loadStatistics();                 // คำนวณใหม่ให้ตรงกับตัวกรองล่าสุด
   const rep = lastStatsReport;
   if (!rep) return;
-  if (rep.mode === 'classroom' || rep.mode === 'school') {
-    Swal.fire('แจ้งเตือน', 'โหมดรายห้องเรียน/ทั้งโรงเรียนยังไม่รองรับการส่งออกไฟล์', 'info');
-    return;
-  }
   if (rep.mode === 'student' && !rep.student) {
     Swal.fire('แจ้งเตือน', 'กรุณาเลือกนักเรียนก่อนส่งออกไฟล์', 'warning');
     return;
@@ -2959,6 +4148,24 @@ function exportStats(kind) {
 async function exportXlsx(rep) {
   await loadScriptOnce('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', 'XLSX');
   const wb = XLSX.utils.book_new();
+  if (rep.sheets && rep.sheets.length) {
+    const addGeneric = (name, aoa) => {
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = (aoa[0] || []).map((h, i) => ({ wch: i === 0 ? 30 : Math.max(10, Math.min(30, String(h).length + 8)) }));
+      XLSX.utils.book_append_sheet(wb, ws, String(name).slice(0, 31));
+    };
+    addGeneric('สรุป', [
+      ['รายงานสถิติการเข้าเรียน'],
+      ['โรงเรียนบ้านหนองขุย (นาคสวัสดิ์ประชานุเคราะห์)'],
+      ...(rep.metaLines || []).map(line => [line]),
+      ['สร้างเมื่อ', rep.generatedAt.toLocaleString('th-TH')],
+      []
+    ]);
+    rep.sheets.forEach(s => addGeneric(s.name, [s.headers].concat(s.rows)));
+    XLSX.writeFile(wb, statsFileName(rep, 'xlsx'));
+    return;
+  }
+
   const meta = [
     ['รายงานสถิติการเข้าเรียน'],
     ['โรงเรียนบ้านหนองขุย (นาคสวัสดิ์ประชานุเคราะห์)'],
@@ -3043,6 +4250,28 @@ async function exportDocx(rep) {
       ...rows.map(r => new TableRow({ children: r.map((v, i) => cell(v, { width: widths[i], left: i === 1 })) }))
     ]
   });
+
+  if (rep.sheets && rep.sheets.length) {
+    const kids = [
+      para('รายงานสถิติการเข้าเรียน', { center: true, bold: true, size: 34, after: 60 }),
+      para('โรงเรียนบ้านหนองขุย (นาคสวัสดิ์ประชานุเคราะห์)', { center: true, color: '6B7280', after: 200 }),
+      ...(rep.metaLines || []).map(line => para(line, { bold: true })),
+      para(`สร้างเมื่อ: ${rep.generatedAt.toLocaleString('th-TH')}`, { color: '6B7280', after: 240 })
+    ];
+    rep.sheets.forEach(s => {
+      kids.push(para(s.name, { bold: true, size: 26, after: 120 }));
+      const widths = s.headers.map(() => 100 / s.headers.length);
+      kids.push(table(s.headers, s.rows.map(r => r.map(v => String(v ?? ''))), widths));
+      kids.push(para('', { after: 200 }));
+    });
+    const genericDoc = new Document({
+      styles: { default: { document: { run: { font: 'Sarabun', size: 20 } } } },
+      sections: [{ properties: {}, children: kids }]
+    });
+    const genericBlob = await Packer.toBlob(genericDoc);
+    downloadBlob(genericBlob, statsFileName(rep, 'docx'));
+    return;
+  }
 
   const children = [
     para('รายงานสถิติการเข้าเรียน', { center: true, bold: true, size: 34, after: 60 }),
@@ -3184,8 +4413,10 @@ async function testConnection() {
    ================================================== */
 document.addEventListener('DOMContentLoaded', async () => {
   initAnalytics();
+  setActiveNav('dashboard');
   initAllClassSelects();
-  document.getElementById('attendance-date').value = todayThaiStr();
+  initDateFields();
+  setDateField(document.getElementById('attendance-date'), todayThaiStr());
   document.getElementById('attendance-class').addEventListener('change', onCheckinContextChange);
   autoSelectPeriod();   // เลือกช่วงเวลาตามเวลาปัจจุบันไว้ให้ก่อน (ผู้ใช้เปลี่ยนเองได้)
   const studentList = document.getElementById('student-list');

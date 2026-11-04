@@ -234,11 +234,25 @@ function requireAuth_(token) {
 
 function withScriptLock_(callback) {
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  // บัฟเฟอร์คิว: รอคิวเขียนข้อมูลสูงสุด ~25 วินาที เพื่อรองรับครูหลายคนบันทึกพร้อมกัน
+  const deadline = Date.now() + 25000;
+  let acquired = false;
+  while (!acquired) {
+    const remain = deadline - Date.now();
+    if (remain <= 0) throw new Error('ระบบมีคิวบันทึกข้อมูลจากผู้ใช้อื่นหนาแน่น กรุณากดบันทึกอีกครั้ง');
+    try {
+      lock.waitLock(Math.min(remain, 5000));
+      acquired = true;
+    } catch (err) {
+      if (Date.now() >= deadline) {
+        throw new Error('ระบบมีคิวบันทึกข้อมูลจากผู้ใช้อื่นหนาแน่น กรุณากดบันทึกอีกครั้ง');
+      }
+    }
+  }
   try {
     return callback();
   } finally {
-    lock.releaseLock();
+    try { lock.releaseLock(); } catch (_) {}
   }
 }
 

@@ -2706,7 +2706,8 @@ function setStatsMode(mode) {
 function onStatsClassChange() {
   updateStatsSubjectDropdown();
   updateStatsStudentDropdown();
-if (statsMode === 'classroom' || statsMode === 'school' || statsMode === 'ranking' || statsMode === 'activity' || statsMode === 'summary') loadStatistics();
+  fillStatsFocusSelect();
+  if (statsMode === 'classroom' || statsMode === 'school' || statsMode === 'ranking' || statsMode === 'activity' || statsMode === 'summary') loadStatistics();
 }
 
 function updateStatsStudentDropdown() {
@@ -3890,14 +3891,25 @@ function statsFocusValue() {
 }
 
 function statsFocusSubjectList() {
+  const cls = normalizeClass(document.getElementById('stats-class')?.value || '');
   const seen = new Set();
   const list = [];
+  const push = name => {
+    const n = String(name || '').trim();
+    if (!n || seen.has(n) || activityOf(n)) return;
+    seen.add(n);
+    list.push(n);
+  };
   (allData.subjects || []).forEach(s => {
-    const name = String(s.subject_name || '').trim();
-    if (!name || seen.has(name)) return;
-    seen.add(name);
-    list.push(name);
+    if (cls && normalizeClass(s.subject_class) !== cls) return;
+    push(s.subject_name);
   });
+  // กันตกหล่น: วิชาที่มีรายการเช็คชื่อของชั้นนี้แต่ยังไม่ถูกเพิ่มในชีตรายวิชา
+  if (cls) {
+    allData.attendance.forEach(r => {
+      if (attendanceMatchesClass(r, cls)) push(r.attendance_subject);
+    });
+  }
   return list.sort((a, b) => a.localeCompare(b, 'th'));
 }
 
@@ -4254,12 +4266,44 @@ function buildSchoolSummaryReport() {
       }).sort((a, b) => activityClassOrder(a.cls) - activityClassOrder(b.cls) ||
         String(a.id).localeCompare(String(b.id), undefined, { numeric: true }))
     };
+    if (cls) {
+      (allData.students || []).filter(st => normalizeClass(st.student_class) === cls).forEach(st => {
+        if (focusInfo.studentRows.some(r => String(r.id) === String(st.student_id))) return;
+        focusInfo.studentRows.push({ cls, id: String(st.student_id), name: st.student_name, tally: statusTally([]) });
+      });
+      focusInfo.studentRows.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+      focusInfo.students = focusInfo.studentRows.length;
+    }
+  }
+
+  // รายชื่อนักเรียนของชั้นที่เลือก (ใช้ทั้งตารางบนหน้าจอและชีตส่งออก)
+  let roster = null;
+  if (focusInfo) {
+    roster = focusInfo.studentRows;
+  } else if (cls) {
+    const byStudent = new Map();
+    recs.forEach(r => {
+      const c2 = r._cls || normalizeClass(r.attendance_student_class);
+      const sk = c2 + '|' + String(r.attendance_student_id);
+      if (!byStudent.has(sk)) byStudent.set(sk, { cls: c2, id: String(r.attendance_student_id), recs: [] });
+      byStudent.get(sk).recs.push(r);
+    });
+    const rows = [...byStudent.values()].map(v => {
+      const st = findStudentRecord(v.id, v.cls);
+      return { cls: v.cls, id: v.id, name: st ? st.student_name : '(ไม่พบชื่อในทะเบียน)', tally: statusTally(v.recs) };
+    });
+    // เติมนักเรียนที่ยังไม่มีรายการเช็คชื่อในชั้นนี้ เพื่อให้เห็นรายชื่อครบทั้งห้อง
+    (allData.students || []).filter(st => normalizeClass(st.student_class) === cls).forEach(st => {
+      if (rows.some(v => String(v.id) === String(st.student_id))) return;
+      rows.push({ cls, id: String(st.student_id), name: st.student_name, tally: statusTally([]) });
+    });
+    roster = rows.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
   }
 
   return {
     mode: 'summary',
     range,
-    groups, classRows, focus, focusLabel, focusName: statsFocusName(focus), focusInfo, cls, clsLabel,
+    groups, classRows, focus, focusLabel, focusName: statsFocusName(focus), focusInfo, cls, clsLabel, roster,
     totalRec: recs.length,
     generatedAt: new Date(),
     metaLines: [
@@ -4292,9 +4336,9 @@ function buildSchoolSummaryReport() {
       },
       {
         name: 'รายชื่อนักเรียน',
-        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', 'จำนวนครั้ง', 'มา+สาย', '% มา'],
-        rows: focusInfo.studentRows.map(s => [s.cls, s.id, s.name, s.tally.total,
-          s.tally.มา + s.tally.สาย, s.tally.rate.toFixed(1)])
+        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', 'จำนวนครั้ง', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+        rows: focusInfo.studentRows.map(s => [s.cls, s.id, s.name, s.tally.total, s.tally.มา,
+          s.tally.สาย, s.tally.ลา, s.tally.ขาด, s.tally.rate.toFixed(1)])
       }
     ] : [
       {
@@ -4316,7 +4360,13 @@ function buildSchoolSummaryReport() {
           const t = c.byCat[cat];
           return [c.cls, cat, t.total, t.มา, t.สาย, t.ลา, t.ขาด, t.rate.toFixed(1)];
         }))
-      }
+      },
+      ...(roster && roster.length ? [{
+        name: 'รายชื่อนักเรียน',
+        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', 'จำนวนครั้ง', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+        rows: roster.map(r => [r.cls, r.id, r.name, r.tally.total, r.tally.มา, r.tally.สาย,
+          r.tally.ลา, r.tally.ขาด, r.tally.rate.toFixed(1)])
+      }] : [])
     ]
   };
 }
@@ -4371,6 +4421,61 @@ function summaryTable(g) {
         <td class="px-3 py-2.5 text-center text-blue-700">${g.tally.ลา}</td>
         <td class="px-3 py-2.5 text-center text-red-700">${g.tally.ขาด}</td>
         <td class="px-3 py-2.5 text-center">${g.tally.rate.toFixed(1)}%</td>
+      </tr></tfoot>
+    </table>
+  </div>`;
+}
+
+function summaryRosterTable(rows, title, sub) {
+  if (!rows || !rows.length) {
+    return `<h3 class="text-lg font-bold text-gray-800 mb-3">${title}</h3>
+      <p class="text-sm text-gray-500 mb-4">— ยังไม่มีรายชื่อนักเรียนตามตัวเลือกนี้ —</p>`;
+  }
+  const tot = { total: 0, มา: 0, สาย: 0, ลา: 0, ขาด: 0 };
+  rows.forEach(r => {
+    tot.total += r.tally.total;
+    tot.มา += r.tally.มา;
+    tot.สาย += r.tally.สาย;
+    tot.ลา += r.tally.ลา;
+    tot.ขาด += r.tally.ขาด;
+  });
+  const rate = tot.total ? ((tot.มา + tot.สาย) / tot.total) * 100 : 0;
+  return `<h3 class="text-lg font-bold text-gray-800 mb-3">${title}
+    ${sub ? `<span class="text-sm font-normal text-gray-500">${sub}</span>` : ''}</h3>
+  <div class="table-scroll mb-4">
+    <table class="data-table" style="min-width:860px">
+      <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+        <th class="px-3 py-3">ชั้น</th>
+        <th class="px-3 py-3">เลขที่</th>
+        <th class="px-3 py-3 text-left">ชื่อ-สกุล</th>
+        <th class="px-3 py-3">ครั้ง</th>
+        <th class="px-3 py-3">มา</th>
+        <th class="px-3 py-3">สาย</th>
+        <th class="px-3 py-3">ลา</th>
+        <th class="px-3 py-3">ขาด</th>
+        <th class="px-3 py-3">% มา</th>
+      </tr></thead>
+      <tbody>
+      ${rows.map(r => `<tr class="hover:bg-red-50">
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(r.cls)}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(r.id)}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 font-semibold">${esc(r.name)}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center">${r.tally.total}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${r.tally.มา}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${r.tally.สาย}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${r.tally.ลา}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${r.tally.ขาด}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold ${r.tally.total ? (r.tally.rate >= ATTENDANCE_PASS_RATE ? 'text-green-700' : 'text-red-700') : 'text-gray-300'}">${r.tally.total ? r.tally.rate.toFixed(1) + '%' : '–'}</td>
+      </tr>`).join('')}
+      </tbody>
+      <tfoot><tr class="bg-gray-50 font-bold text-gray-800">
+        <td class="px-3 py-2.5" colspan="3">รวม ${rows.length} คน</td>
+        <td class="px-3 py-2.5 text-center">${tot.total}</td>
+        <td class="px-3 py-2.5 text-center text-green-700">${tot.มา}</td>
+        <td class="px-3 py-2.5 text-center text-amber-700">${tot.สาย}</td>
+        <td class="px-3 py-2.5 text-center text-blue-700">${tot.ลา}</td>
+        <td class="px-3 py-2.5 text-center text-red-700">${tot.ขาด}</td>
+        <td class="px-3 py-2.5 text-center">${rate.toFixed(1)}%</td>
       </tr></tfoot>
     </table>
   </div>`;
@@ -4455,6 +4560,7 @@ function renderSummaryFocus(rep) {
     </table>
   </div>
   <p class="text-xs text-gray-500 mt-3">💡 ไฟล์ส่งออกมี 4 ชีต: “สรุปที่เลือก” · “ตามชั้นเรียน” · “ตามวันที่” · “รายชื่อนักเรียน”</p>`;
+  html += summaryRosterTable(f.studentRows, `👤 รายชื่อนักเรียน${rep.clsLabel ? ' ชั้น ' + rep.clsLabel : ''}`, 'สถิติของกิจกรรม/วิชาที่เลือก');
   return html;
 }
 
@@ -4498,7 +4604,10 @@ function renderSchoolSummary(rep) {
       </tbody>
     </table>
   </div>
-  <p class="text-xs text-gray-500 mt-3">💡 ไฟล์ส่งออกมี 3 ชีต: “สรุปหมวด” · “แยกตามวิชา” · “ตามชั้นเรียน”</p>`;
+  <p class="text-xs text-gray-500 mt-3">💡 ไฟล์ส่งออกมี 3 ชีต: “สรุปหมวด” · “แยกตามวิชา” · “ตามชั้นเรียน” · เพิ่ม “รายชื่อนักเรียน” เมื่อเลือกชั้นเรียน</p>`;
+  if (rep.roster && rep.roster.length) {
+    html += summaryRosterTable(rep.roster, `👤 รายชื่อนักเรียน ชั้น ${esc(rep.clsLabel)}`, 'รวมทุกกิจกรรม/วิชาของชั้นนี้');
+  }
   return html;
 }
 

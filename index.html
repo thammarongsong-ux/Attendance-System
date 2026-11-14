@@ -382,6 +382,11 @@
         <label class="block text-sm font-semibold mb-2 text-gray-700">📚 รายวิชา</label>
         <select id="stats-subject" class="field" onchange="loadStatistics()"></select>
       </div>
+      <div id="stats-focus-wrap" class="hidden">
+        <label class="block text-sm font-semibold mb-2 text-gray-700">🎯 เลือกกิจกรรม / วิชา</label>
+        <select id="stats-focus" class="field" onchange="onStatsFocusChange()"></select>
+        <p class="text-[11px] text-gray-500 mt-1">ใช้กับแท็บ “กิจกรรม” และ “สรุปกิจกรรม/วิชา”</p>
+      </div>
       <div id="stats-range-wrap">
         <label class="block text-sm font-semibold mb-2 text-gray-700">📅 ช่วงเวลา</label>
         <select id="stats-period" class="field" onchange="onStatsRangeChange()">
@@ -1742,6 +1747,7 @@ function refreshUI() {
   refreshPeriodLocks(); // อัปเดต 🔒 ของช่วงเวลาที่เช็คชื่อแล้วหลังโหลดข้อมูลใหม่
   updateStatsSubjectDropdown();
   updateStatsStudentDropdown();
+  fillStatsFocusSelect();
 }
 
 function renderDashboard() {
@@ -2700,7 +2706,7 @@ function setStatsMode(mode) {
 function onStatsClassChange() {
   updateStatsSubjectDropdown();
   updateStatsStudentDropdown();
-  if (statsMode === 'classroom' || statsMode === 'school' || statsMode === 'ranking') loadStatistics();
+if (statsMode === 'classroom' || statsMode === 'school' || statsMode === 'ranking' || statsMode === 'activity' || statsMode === 'summary') loadStatistics();
 }
 
 function updateStatsStudentDropdown() {
@@ -3166,8 +3172,10 @@ function syncStatsFilters() {
 
   show('stats-day-wrap', dayMode);
   show('stats-range-wrap', rangeMode);
-  show('stats-class-wrap', mode !== 'activity' && mode !== 'summary' && (mode !== 'school' || view === 'subject'));
+  show('stats-class-wrap', mode !== 'school' || view === 'subject');
   show('stats-subject-wrap', mode === 'overview' || mode === 'student' || mode === 'ranking' || (mode === 'classroom' && (view === 'custom' || view === 'subject')));
+  show('stats-focus-wrap', mode === 'activity' || mode === 'summary');
+  fillStatsFocusSelect();
   show('stats-student-wrap', mode === 'student');
   show('stats-custom-wrap', mode === 'classroom' && view === 'custom');
   show('stats-export-wrap', true);
@@ -3241,8 +3249,8 @@ function statsRangeChips(rep, extra) {
   const chips = [];
   chips.push(rep.mode === 'school'
     ? (rep.cls ? `🎓 ${rep.clsLabel}` : '🏢 ทั้งโรงเรียน')
-    : rep.mode === 'activity' ? '🏢 ทั้งโรงเรียน (แยกตามชั้น)'
-    : rep.mode === 'summary' ? '🏢 ทั้งโรงเรียน (แยกหมวด)'
+    : rep.mode === 'activity' ? (rep.cls ? `🎓 ${rep.clsLabel}` : '🏢 ทั้งโรงเรียน (แยกตามชั้น)')
+    : rep.mode === 'summary' ? (rep.cls ? `🎓 ${rep.clsLabel}` : '🏢 ทั้งโรงเรียน (แยกหมวด)')
     : `🎓 ${rep.clsLabel || 'ทุกชั้น'}`);
   chips.push(`🗓️ ${rangeLabelOf(rep.range)}`);
   (extra || []).forEach(t => chips.push(t));
@@ -3873,6 +3881,90 @@ const ACTIVITY_DEFS = [
 const ACTIVITY_TONES = ['from-sky-500 to-blue-600', 'from-violet-500 to-purple-600',
   'from-emerald-500 to-teal-600', 'from-amber-400 to-orange-500', 'from-rose-500 to-pink-600'];
 
+/* ────────────────────────────────────────────────
+   ตัวกรอง “กิจกรรม / วิชา” ของแท็บกิจกรรม + สรุปกิจกรรม/วิชา
+   ค่า: '' = ทั้งหมด · act:ALL = รวม 5 กิจกรรม · act:<ชื่อกิจกรรม> · subj:<ชื่อวิชา>
+   ──────────────────────────────────────────────── */
+function statsFocusValue() {
+  return document.getElementById('stats-focus')?.value || '';
+}
+
+function statsFocusSubjectList() {
+  const seen = new Set();
+  const list = [];
+  (allData.subjects || []).forEach(s => {
+    const name = String(s.subject_name || '').trim();
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    list.push(name);
+  });
+  return list.sort((a, b) => a.localeCompare(b, 'th'));
+}
+
+function fillStatsFocusSelect() {
+  const sel = document.getElementById('stats-focus');
+  if (!sel) return;
+  const mode = statsMode;
+  const cur = sel.value;
+  const opts = [];
+  if (mode === 'activity') {
+    opts.push('<option value="">🎯 ทั้ง 5 กิจกรรม (ภาพรวม)</option>');
+    ACTIVITY_DEFS.forEach(a => opts.push(`<option value="act:${esc(a.key)}">🎯 ${esc(a.key)}</option>`));
+  } else if (mode === 'summary') {
+    opts.push('<option value="">🧾 ทั้งหมด (แยก 3 หมวด)</option>');
+    opts.push('<option value="act:ALL">🎯 รวม 5 กิจกรรม</option>');
+    ACTIVITY_DEFS.forEach(a => opts.push(`<option value="act:${esc(a.key)}">🎯 ${esc(a.key)}</option>`));
+    const subs = statsFocusSubjectList();
+    if (subs.length) {
+      opts.push('<optgroup label="📚 รายวิชา">');
+      subs.forEach(n => opts.push(`<option value="subj:${esc(n)}">📚 ${esc(n)}</option>`));
+      opts.push('</optgroup>');
+    }
+  }
+  sel.innerHTML = opts.join('');
+  if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+  sel.disabled = !opts.length;
+}
+
+function onStatsFocusChange() {
+  loadStatistics();
+}
+
+function statsFocusLabel(focus) {
+  if (!focus) return '';
+  if (focus === 'act:ALL') return '🎯 รวม 5 กิจกรรม';
+  if (focus.indexOf('act:') === 0) return '🎯 ' + focus.slice(4);
+  if (focus.indexOf('subj:') === 0) return '📚 ' + focus.slice(5);
+  return '';
+}
+
+function statsFocusName(focus) {
+  const label = statsFocusLabel(focus);
+  return label ? label.replace(/^\S+\s+/, '') : '';
+}
+
+function filterByStatsFocus(recs, focus) {
+  if (!focus) return recs;
+  if (focus === 'act:ALL') return recs.filter(r => activityOf(r.attendance_subject));
+  if (focus.indexOf('act:') === 0) {
+    const key = focus.slice(4);
+    return recs.filter(r => { const d = activityOf(r.attendance_subject); return !!d && d.key === key; });
+  }
+  if (focus.indexOf('subj:') === 0) {
+    const name = focus.slice(5);
+    return recs.filter(r => r.attendance_subject === name);
+  }
+  return recs;
+}
+
+function statsFocusActDefs(focus) {
+  if (focus.indexOf('act:') === 0 && focus !== 'act:ALL') {
+    const key = focus.slice(4);
+    return ACTIVITY_DEFS.filter(a => a.key === key);
+  }
+  return ACTIVITY_DEFS;
+}
+
 function activityOf(subject) {
   const s = String(subject || '');
   return ACTIVITY_DEFS.find(a => a.test(s)) || null;
@@ -3885,7 +3977,14 @@ function activityClassOrder(c) {
 
 function buildActivityReport() {
   const range = getDateRange();
-  const recs = recordsInRange(allData.attendance, range).filter(r => activityOf(r.attendance_subject));
+  const focus = statsMode === 'activity' ? statsFocusValue() : '';
+  const actDefs = statsFocusActDefs(focus);
+  const focusLabel = statsFocusLabel(focus);
+  const clsEl = document.getElementById('stats-class');
+  const cls = normalizeClass(clsEl?.value || '');
+  const clsLabel = clsEl && clsEl.value ? clsEl.value : '';
+  const recs = filterByStatsFocus(recordsInRange(allData.attendance, range).filter(r => activityOf(r.attendance_subject)), focus)
+    .filter(r => !cls || attendanceMatchesClass(r, cls));
 
   const students = new Map();   // 'ชั้น|เลขที่' -> {cls, id, byAct, recs}
   const classAct = new Map();   // 'ชั้น|กิจกรรม' -> recs[]
@@ -3929,7 +4028,7 @@ function buildActivityReport() {
     }))
     .sort((a, b) => activityClassOrder(a.cls) - activityClassOrder(b.cls) || a.cls.localeCompare(b.cls, 'th'));
 
-  const summary = ACTIVITY_DEFS.map(a => {
+  const summary = actDefs.map(a => {
     const list = actRecs.get(a.key) || [];
     return { key: a.key, tally: statusTally(list), days: new Set(list.map(r => r.attendance_date)).size };
   });
@@ -3938,16 +4037,19 @@ function buildActivityReport() {
     const sep = ck.lastIndexOf('|');
     return { cls: ck.slice(0, sep), act: ck.slice(sep + 1), tally: statusTally(list) };
   }).sort((a, b) => activityClassOrder(a.cls) - activityClassOrder(b.cls) ||
-    ACTIVITY_DEFS.findIndex(x => x.key === a.act) - ACTIVITY_DEFS.findIndex(x => x.key === b.act));
+    actDefs.findIndex(x => x.key === a.act) - actDefs.findIndex(x => x.key === b.act))
+    .filter(r => actDefs.some(a => a.key === r.act));
 
   return {
     mode: 'activity',
     range,
     groupList, summary, classActRows,
+    actDefs, focus, focusLabel, focusName: statsFocusName(focus), cls, clsLabel,
     totalRec: recs.length,
     generatedAt: new Date(),
     metaLines: [
-      'ขอบเขต: ทั้งโรงเรียน (แยกตารางตามชั้นเรียน)',
+      cls ? `ขอบเขต: ชั้น ${clsLabel}` : 'ขอบเขต: ทั้งโรงเรียน (แยกตารางตามชั้นเรียน)',
+      ...(focusLabel ? [`ตัวกรองที่เลือก: ${focusLabel}`] : []),
       `กิจกรรม: ${ACTIVITY_DEFS.map(a => a.key).join(' · ')}`,
       `ช่วงวันที่: ${rangeLabelOf(range)}`,
       `รายการเช็คชื่อกิจกรรม: ${recs.length} · ชั้นที่มีข้อมูล: ${groupList.length}`,
@@ -3968,10 +4070,10 @@ function buildActivityReport() {
       },
       {
         name: 'รายชื่อนักเรียน',
-        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', ...ACTIVITY_DEFS.map(a => a.key), 'รวม', '% มา'],
+        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', ...actDefs.map(a => a.key), 'รวม', '% มา'],
         rows: groupList.flatMap(g => g.students.map(s => [
           s.cls, s.id, s.name,
-          ...ACTIVITY_DEFS.map(a => s.acts[a.key].total
+          ...actDefs.map(a => s.acts[a.key].total
             ? `${s.acts[a.key].มา + s.acts[a.key].สาย}/${s.acts[a.key].total}` : '-'),
           `${s.tally.มา + s.tally.สาย}/${s.tally.total}`, s.tally.rate.toFixed(1)
         ]))
@@ -3988,26 +4090,28 @@ function activityCell(t) {
 }
 
 function renderActivity(rep) {
-  const chips = statsRangeChips(rep, []);
+  const actDefs = rep.actDefs && rep.actDefs.length ? rep.actDefs : actDefs;
+  const cols = actDefs.length;
+  const chips = statsRangeChips(rep, rep.focusLabel ? [rep.focusLabel] : []);
 
-  let html = chips + `<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-    ${rep.summary.map((s, i) => statsMetricCard(
+  let html = chips + `<div class="grid grid-cols-2 lg:grid-cols-${Math.max(2, Math.min(cols, 5))} gap-3 mb-6">
+    ${rep.summary.map(s => statsMetricCard(
       s.tally.total ? s.tally.rate.toFixed(1) + '%' : '–',
       `${s.key}<br><span class="text-xs font-normal opacity-90">${s.tally.total} ครั้ง · ${s.days} วัน</span>`,
-      ACTIVITY_TONES[i % ACTIVITY_TONES.length])).join('')}
+      ACTIVITY_TONES[Math.max(0, actDefs.findIndex(a => a.key === s.key)) % ACTIVITY_TONES.length])).join('')}
   </div>
   <p class="text-xs text-gray-500 mb-5">💡 ตารางแยกตามชั้นเรียน แต่ละช่องคือ <b>จำนวนครั้งที่มา/ทั้งหมด</b> (มา + สาย นับเป็นมา) · % ต่อท้ายคืออัตราการมา · เลือก “✏️ กำหนดเอง” ในช่องช่วงเวลาเพื่อดูตามช่วงวันที่ต้องการได้</p>`;
 
   if (!rep.groupList.length) {
-    return html + statsEmpty('🎯', 'ยังไม่มีข้อมูลกิจกรรมในช่วงที่เลือก', 'ลองเปลี่ยนช่วงเวลา หรือตรวจสอบชื่อกิจกรรมที่บันทึกไว้');
+    return html + statsEmpty('🎯', 'ยังไม่มีข้อมูลกิจกรรมในช่วงที่เลือก', 'ลองเปลี่ยนช่วงเวลา หรือเลือกกิจกรรมอื่น');
   }
 
   rep.groupList.forEach(g => {
     const totals = {};
-    ACTIVITY_DEFS.forEach(a => { totals[a.key] = { total: 0, present: 0, มา: 0, สาย: 0, ลา: 0, ขาด: 0 }; });
+    actDefs.forEach(a => { totals[a.key] = { total: 0, present: 0, มา: 0, สาย: 0, ลา: 0, ขาด: 0 }; });
     const all = { total: 0, present: 0 };
     g.students.forEach(s => {
-      ACTIVITY_DEFS.forEach(a => {
+      actDefs.forEach(a => {
         const t = s.acts[a.key];
         totals[a.key].total += t.total;
         totals[a.key].present += t.มา + t.สาย;
@@ -4021,11 +4125,11 @@ function renderActivity(rep) {
     html += `<h3 class="text-lg font-bold text-gray-800 mb-3">🏫 ชั้น ${esc(g.cls)}
       <span class="text-sm font-normal text-gray-500">(${g.students.length} คน)</span></h3>
     <div class="table-scroll mb-6">
-      <table class="data-table" style="min-width:${720 + ACTIVITY_DEFS.length * 110}px">
+      <table class="data-table" style="min-width:${720 + actDefs.length * 110}px">
         <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
           <th class="px-3 py-3">เลขที่</th>
           <th class="px-3 py-3 text-left">ชื่อ-สกุล</th>
-          ${ACTIVITY_DEFS.map(a => `<th class="px-3 py-3">${esc(a.key)}</th>`).join('')}
+          ${actDefs.map(a => `<th class="px-3 py-3">${esc(a.key)}</th>`).join('')}
           <th class="px-3 py-3">รวม</th>
           <th class="px-3 py-3">% มา</th>
         </tr></thead>
@@ -4033,14 +4137,14 @@ function renderActivity(rep) {
         ${g.students.map(s => `<tr class="hover:bg-red-50">
           <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(s.id)}</td>
           <td class="px-3 py-2.5 border-b border-gray-100 font-semibold">${esc(s.name)}</td>
-          ${ACTIVITY_DEFS.map(a => `<td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">${activityCell(s.acts[a.key])}</td>`).join('')}
+          ${actDefs.map(a => `<td class="px-3 py-2.5 border-b border-gray-100 text-center whitespace-nowrap">${activityCell(s.acts[a.key])}</td>`).join('')}
           <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${s.tally.มา + s.tally.สาย}/${s.tally.total}</td>
           <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold ${s.tally.rate >= ATTENDANCE_PASS_RATE ? 'text-green-700' : 'text-red-700'}">${s.tally.rate.toFixed(1)}%</td>
         </tr>`).join('')}
         </tbody>
         <tfoot><tr class="bg-gray-50 font-bold text-gray-800">
           <td class="px-3 py-2.5" colspan="2">รวมทั้งชั้น</td>
-          ${ACTIVITY_DEFS.map(a => `<td class="px-3 py-2.5 text-center whitespace-nowrap">${totals[a.key].present}/${totals[a.key].total}
+          ${actDefs.map(a => `<td class="px-3 py-2.5 text-center whitespace-nowrap">${totals[a.key].present}/${totals[a.key].total}
             <span class="block text-[11px] font-normal text-gray-500">${totals[a.key].total ? ((totals[a.key].present / totals[a.key].total) * 100).toFixed(0) + '%' : '–'}</span></td>`).join('')}
           <td class="px-3 py-2.5 text-center">${all.present}/${all.total}</td>
           <td class="px-3 py-2.5 text-center">${all.total ? ((all.present / all.total) * 100).toFixed(1) + '%' : '–'}</td>
@@ -4049,7 +4153,7 @@ function renderActivity(rep) {
     </div>`;
   });
 
-  html += `<p class="text-xs text-gray-500 mt-3">💡 ไฟล์ส่งออกมี 3 ชีต: “สรุปกิจกรรม” · “แยกตามชั้น” · “รายชื่อนักเรียน”</p>`;
+  html += `<p class="text-xs text-gray-500 mt-3">💡 ไฟล์ส่งออกมี 3 ชีต: “สรุปกิจกรรม” · “แยกตามชั้น” · “รายชื่อนักเรียน” (กรองตามกิจกรรมที่เลือก)</p>`;
   return html;
 }
 
@@ -4070,7 +4174,13 @@ function subjectCategory(subject) {
 
 function buildSchoolSummaryReport() {
   const range = getDateRange();
-  const recs = recordsInRange(allData.attendance, range);
+  const focus = statsMode === 'summary' ? statsFocusValue() : '';
+  const focusLabel = statsFocusLabel(focus);
+  const clsEl = document.getElementById('stats-class');
+  const cls = normalizeClass(clsEl?.value || '');
+  const clsLabel = clsEl && clsEl.value ? clsEl.value : '';
+  const recs = filterByStatsFocus(recordsInRange(allData.attendance, range), focus)
+    .filter(r => !cls || attendanceMatchesClass(r, cls));
 
   const subjects = new Map();  // วิชา -> {name, cat, recs, days:Set, students:Set}
   const catRecs = new Map();   // หมวด -> recs[]
@@ -4108,20 +4218,85 @@ function buildSchoolSummaryReport() {
     SUMMARY_CATEGORIES.forEach(c => { byCat[c] = statusTally(cm.get(c) || []); });
     return { cls, byCat };
   }).sort((a, b) => activityClassOrder(a.cls) - activityClassOrder(b.cls) || a.cls.localeCompare(b.cls, 'th'));
+  // โหมดเลือกกิจกรรม/วิชาเดียว: สรุปตามชั้น + ตามวัน + รายชื่อนักเรียน
+  let focusInfo = null;
+  if (focus) {
+    const byClass = new Map();
+    const byDate = new Map();
+    const byStudent = new Map();
+    recs.forEach(r => {
+      const cls = r._cls || normalizeClass(r.attendance_student_class);
+      if (!byClass.has(cls)) byClass.set(cls, []);
+      byClass.get(cls).push(r);
+      if (!byDate.has(r.attendance_date)) byDate.set(r.attendance_date, []);
+      byDate.get(r.attendance_date).push(r);
+      const sk = cls + '|' + String(r.attendance_student_id);
+      if (!byStudent.has(sk)) byStudent.set(sk, { cls, id: String(r.attendance_student_id), recs: [] });
+      byStudent.get(sk).recs.push(r);
+    });
+
+    focusInfo = {
+      label: focusLabel,
+      cat: focus.indexOf('subj:') === 0 ? subjectCategory(focus.slice(5)) : 'กิจกรรม',
+      tally: statusTally(recs),
+      days: byDate.size,
+      students: byStudent.size,
+      byClass: [...byClass.entries()].map(([cls, list]) => ({
+        cls,
+        tally: statusTally(list),
+        students: new Set(list.map(r => String(r.attendance_student_id))).size
+      })).sort((a, b) => activityClassOrder(a.cls) - activityClassOrder(b.cls) || a.cls.localeCompare(b.cls, 'th')),
+      byDate: [...byDate.entries()].map(([date, list]) => ({ date, tally: statusTally(list) }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      studentRows: [...byStudent.values()].map(v => {
+        const st = findStudentRecord(v.id, v.cls);
+        return { cls: v.cls, id: v.id, name: st ? st.student_name : '(ไม่พบชื่อในทะเบียน)', tally: statusTally(v.recs) };
+      }).sort((a, b) => activityClassOrder(a.cls) - activityClassOrder(b.cls) ||
+        String(a.id).localeCompare(String(b.id), undefined, { numeric: true }))
+    };
+  }
 
   return {
     mode: 'summary',
     range,
-    groups, classRows,
+    groups, classRows, focus, focusLabel, focusName: statsFocusName(focus), focusInfo, cls, clsLabel,
     totalRec: recs.length,
     generatedAt: new Date(),
     metaLines: [
-      'ขอบเขต: ทั้งโรงเรียน',
+      cls ? `ขอบเขต: ชั้น ${clsLabel}` : 'ขอบเขต: ทั้งโรงเรียน',
+      ...(focusLabel ? [`ตัวกรองที่เลือก: ${focusLabel}`] : []),
       `ช่วงวันที่: ${rangeLabelOf(range)}`,
       `รายการเช็คชื่อ: ${recs.length} · รายวิชา/กิจกรรมทั้งหมด: ${subjects.size}`,
-      ...groups.map(g => `${g.key}: ${g.items.length} รายการ · ${g.tally.total} ครั้ง · อัตราการมา ${g.tally.rate.toFixed(1)}%`)
+      ...(focusInfo
+        ? [`${focusLabel}: ${focusInfo.tally.total} ครั้ง · ${focusInfo.days} วัน · ${focusInfo.students} คน · อัตราการมา ${focusInfo.tally.rate.toFixed(1)}%`]
+        : groups.map(g => `${g.key}: ${g.items.length} รายการ · ${g.tally.total} ครั้ง · อัตราการมา ${g.tally.rate.toFixed(1)}%`))
     ],
-    sheets: [
+    sheets: focusInfo ? [
+      {
+        name: 'สรุปที่เลือก',
+        headers: ['รายการ', 'หมวด', 'จำนวนครั้ง', 'จำนวนวัน', 'จำนวนนักเรียน', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+        rows: [[focusInfo.label, focusInfo.cat, focusInfo.tally.total, focusInfo.days, focusInfo.students,
+          focusInfo.tally.มา, focusInfo.tally.สาย, focusInfo.tally.ลา, focusInfo.tally.ขาด, focusInfo.tally.rate.toFixed(1)]]
+      },
+      {
+        name: 'ตามชั้นเรียน',
+        headers: ['ชั้น', 'จำนวนครั้ง', 'จำนวนนักเรียน', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+        rows: focusInfo.byClass.map(c => [c.cls, c.tally.total, c.students, c.tally.มา, c.tally.สาย,
+          c.tally.ลา, c.tally.ขาด, c.tally.rate.toFixed(1)])
+      },
+      {
+        name: 'ตามวันที่',
+        headers: ['วันที่', 'จำนวนครั้ง', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
+        rows: focusInfo.byDate.map(d => [fmtThaiDate(d.date), d.tally.total, d.tally.มา, d.tally.สาย,
+          d.tally.ลา, d.tally.ขาด, d.tally.rate.toFixed(1)])
+      },
+      {
+        name: 'รายชื่อนักเรียน',
+        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', 'จำนวนครั้ง', 'มา+สาย', '% มา'],
+        rows: focusInfo.studentRows.map(s => [s.cls, s.id, s.name, s.tally.total,
+          s.tally.มา + s.tally.สาย, s.tally.rate.toFixed(1)])
+      }
+    ] : [
       {
         name: 'สรุปหมวด',
         headers: ['หมวด', 'จำนวนรายการ', 'จำนวนครั้ง', 'มา', 'สาย', 'ลา', 'ขาด', '% มา'],
@@ -4201,7 +4376,90 @@ function summaryTable(g) {
   </div>`;
 }
 
+function renderSummaryFocus(rep) {
+  const f = rep.focusInfo;
+  const t = f.tally;
+  const tone = summaryCategoryTone(f.cat);
+  let html = statsRangeChips(rep, [rep.focusLabel]) + `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    ${statsMetricCard(t.total ? t.rate.toFixed(1) + '%' : '–', `% มา<br><span class="text-xs font-normal opacity-90">${t.มา + t.สาย}/${t.total} ครั้ง</span>`, tone)}
+    ${statsMetricCard(t.total, `จำนวนครั้ง<span class="block text-xs font-normal opacity-90">${f.days} วัน</span>`, 'from-rose-500 to-pink-600')}
+    ${statsMetricCard(t.มา, `มา<span class="block text-xs font-normal opacity-90">สาย ${t.สาย}</span>`, 'from-emerald-500 to-teal-600')}
+    ${statsMetricCard(t.ขาด, `ขาด<span class="block text-xs font-normal opacity-90">ลา ${t.ลา} · ${f.students} คน</span>`, 'from-slate-500 to-gray-700')}
+  </div>
+  <p class="text-xs text-gray-500 mb-5">💡 กำลังดูเฉพาะ <b>${esc(f.label)}</b> · % มา = (มา + สาย) ÷ จำนวนครั้งที่เช็คชื่อ · เปลี่ยนกิจกรรม/วิชาได้ที่ช่อง “🎯 เลือกกิจกรรม / วิชา” ด้านบน</p>`;
+
+  if (!t.total) {
+    return html + statsEmpty('🔎', 'ไม่พบข้อมูลของกิจกรรม/วิชาที่เลือก', 'ลองเปลี่ยนช่วงเวลา หรือเลือกกิจกรรม/วิชาอื่น');
+  }
+
+  html += `<h3 class="text-lg font-bold text-gray-800 mb-3">🏫 แยกตามชั้นเรียน</h3>
+  <div class="table-scroll mb-6">
+    <table class="data-table" style="min-width:760px">
+      <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+        <th class="px-3 py-3">ชั้น</th>
+        <th class="px-3 py-3">นักเรียน</th>
+        <th class="px-3 py-3">ครั้ง</th>
+        <th class="px-3 py-3">มา</th>
+        <th class="px-3 py-3">สาย</th>
+        <th class="px-3 py-3">ลา</th>
+        <th class="px-3 py-3">ขาด</th>
+        <th class="px-3 py-3">% มา</th>
+      </tr></thead>
+      <tbody>
+      ${f.byClass.map(c => `<tr class="hover:bg-red-50">
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold">${esc(c.cls)}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center">${c.students}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center">${c.tally.total}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${c.tally.มา}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${c.tally.สาย}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${c.tally.ลา}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${c.tally.ขาด}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold ${c.tally.rate >= ATTENDANCE_PASS_RATE ? 'text-green-700' : 'text-red-700'}">${c.tally.rate.toFixed(1)}%</td>
+      </tr>`).join('')}
+      </tbody>
+      <tfoot><tr class="bg-gray-50 font-bold text-gray-800">
+        <td class="px-3 py-2.5">รวม</td>
+        <td class="px-3 py-2.5 text-center">${f.students}</td>
+        <td class="px-3 py-2.5 text-center">${t.total}</td>
+        <td class="px-3 py-2.5 text-center text-green-700">${t.มา}</td>
+        <td class="px-3 py-2.5 text-center text-amber-700">${t.สาย}</td>
+        <td class="px-3 py-2.5 text-center text-blue-700">${t.ลา}</td>
+        <td class="px-3 py-2.5 text-center text-red-700">${t.ขาด}</td>
+        <td class="px-3 py-2.5 text-center">${t.rate.toFixed(1)}%</td>
+      </tr></tfoot>
+    </table>
+  </div>
+  <h3 class="text-lg font-bold text-gray-800 mb-3">📅 แยกตามวันที่</h3>
+  <div class="table-scroll mb-4">
+    <table class="data-table" style="min-width:700px">
+      <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+        <th class="px-3 py-3">วันที่</th>
+        <th class="px-3 py-3">ครั้ง</th>
+        <th class="px-3 py-3">มา</th>
+        <th class="px-3 py-3">สาย</th>
+        <th class="px-3 py-3">ลา</th>
+        <th class="px-3 py-3">ขาด</th>
+        <th class="px-3 py-3">% มา</th>
+      </tr></thead>
+      <tbody>
+      ${f.byDate.map(d => `<tr class="hover:bg-red-50">
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center font-semibold">${esc(fmtThaiDate(d.date))}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center">${d.tally.total}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-600 font-semibold">${d.tally.มา}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-600 font-semibold">${d.tally.สาย}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-600 font-semibold">${d.tally.ลา}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-600 font-semibold">${d.tally.ขาด}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center font-bold ${d.tally.rate >= ATTENDANCE_PASS_RATE ? 'text-green-700' : 'text-red-700'}">${d.tally.rate.toFixed(1)}%</td>
+      </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-gray-500 mt-3">💡 ไฟล์ส่งออกมี 4 ชีต: “สรุปที่เลือก” · “ตามชั้นเรียน” · “ตามวันที่” · “รายชื่อนักเรียน”</p>`;
+  return html;
+}
+
 function renderSchoolSummary(rep) {
+  if (rep.focusInfo) return renderSummaryFocus(rep);
   let html = statsRangeChips(rep, []) + `<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
     ${rep.groups.map(g => statsMetricCard(
       g.tally.total ? g.tally.rate.toFixed(1) + '%' : '–',
@@ -4530,8 +4788,10 @@ function statsFileName(rep, ext) {
   } else {
     if (rep.mode === 'activity') {
       parts.push('กิจกรรม');
+      if (rep.cls) parts.push(rep.clsLabel);
     } else if (rep.mode === 'summary') {
       parts.push('สรุปกิจกรรม-วิชา');
+      if (rep.cls) parts.push(rep.clsLabel);
     } else if (rep.mode === 'school') {
       parts.push('ทั้งโรงเรียน');
       if (rep.cls) parts.push(rep.clsLabel);
@@ -4545,6 +4805,7 @@ function statsFileName(rep, ext) {
   if (rep.day) parts.push(rep.day);
   else parts.push(rep.range ? `${rep.range.start}_ถึง_${rep.range.end}` : 'ทั้งหมด');
   if (rep.subject) parts.push(rep.subject);
+  if (rep.focusName) parts.push(rep.focusName);
   const name = parts.join('_').replace(/[\\/:*?"<>|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
   return `${name}.${ext}`;
 }

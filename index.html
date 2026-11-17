@@ -353,7 +353,7 @@
 <div id="statistics-page" class="page hidden">
   <div class="text-center mb-6">
     <h2 class="text-2xl sm:text-3xl font-bold text-gray-800">📊 สถิติการเข้าเรียน</h2>
-    <p class="text-gray-500 text-sm sm:text-base mt-1">ดูได้ทั้ง <b>ภาพรวม</b> · <b>รายห้องเรียน</b> (ช่วงเวลา / รายวิชา / กำหนดเอง) · <b>ทั้งโรงเรียน</b> (ช่วงเวลา / รายวิชา) · <b>อันดับ / เกณฑ์ 80%</b> · <b>กิจกรรม</b> · <b>สรุปกิจกรรม/วิชา</b> และ <b>รายบุคคล</b> · ส่งออกเป็น Excel / Word ได้ทุกโหมด</p>
+    <p class="text-gray-500 text-sm sm:text-base mt-1">ดูได้ทั้ง <b>ภาพรวม</b> · <b>รายห้องเรียน</b> (ช่วงเวลา / รายวิชา / กำหนดเอง) · <b>ทั้งโรงเรียน</b> (ช่วงเวลา / รายวิชา) · <b>อันดับ / เกณฑ์ 80%</b> · <b>กิจกรรม</b> · <b>สรุปกิจกรรม/วิชา</b> · <b>รายวัน (Status)</b> และ <b>รายบุคคล</b> · ส่งออกเป็น Excel / Word ได้ทุกโหมด</p>
   </div>
 
   <div class="stats-tabs mb-3 sm:justify-center">
@@ -363,6 +363,7 @@
     <button id="stats-tab-ranking" onclick="setStatsMode('ranking')" class="btn bg-white text-gray-700 border border-gray-200">🏅 อันดับ / เกณฑ์ 80%</button>
     <button id="stats-tab-activity" onclick="setStatsMode('activity')" class="btn bg-white text-gray-700 border border-gray-200">🎯 กิจกรรม</button>
     <button id="stats-tab-summary" onclick="setStatsMode('summary')" class="btn bg-white text-gray-700 border border-gray-200">🧾 สรุปกิจกรรม/วิชา</button>
+    <button id="stats-tab-daily" onclick="setStatsMode('daily')" class="btn bg-white text-gray-700 border border-gray-200">📅 รายวัน (Status)</button>
     <button id="stats-tab-student" onclick="setStatsMode('student')" class="btn bg-white text-gray-700 border border-gray-200">👤 รายบุคคล</button>
   </div>
 
@@ -401,6 +402,17 @@
       <div id="stats-day-wrap" class="hidden">
         <label class="block text-sm font-semibold mb-2 text-gray-700">📅 วันที่เช็คชื่อ</label>
         <input type="text" id="stats-day" class="field date-field" inputmode="numeric" maxlength="10" placeholder="วว/ดด/ปปปป" autocomplete="off" onchange="loadStatistics()">
+      </div>
+      <div id="stats-daily-mode-wrap" class="hidden">
+        <label class="block text-sm font-semibold mb-2 text-gray-700">🗓️ ช่วงเวลาของสถานะ</label>
+        <select id="stats-daily-mode" class="field" onchange="onDailyModeChange()">
+          <option value="custom">✏️ กำหนดเอง</option>
+          <option value="day" selected>📅 รายวัน</option>
+          <option value="week">🗓️ รายสัปดาห์</option>
+          <option value="month">📆 รายเดือน</option>
+          <option value="all">🗂️ ทั้งหมด</option>
+        </select>
+        <p class="text-[11px] text-gray-500 mt-1">ใช้กับแท็บ “📅 รายวัน (Status)”</p>
       </div>
       <div class="flex items-end">
         <button onclick="loadStatistics()" class="btn bg-red-600 hover:bg-red-700 text-white w-full">📈 โหลดสถิติ</button>
@@ -634,6 +646,54 @@
       💾 บันทึก Sheet ID
     </button>
     <p id="admin-status" class="text-sm text-gray-600 mt-3 text-center"></p>
+  </div>
+
+  <div class="card p-6 max-w-xl mx-auto mt-6">
+    <h3 class="text-lg font-semibold mb-3">🔑 เปลี่ยนรหัสผ่านของฉัน</h3>
+    <p class="text-sm text-gray-600 mb-3">บัญชีที่ใช้อยู่: <strong id="admin-account-current">-</strong></p>
+    <div class="mb-3">
+      <label class="block text-sm font-semibold mb-1">รหัสผ่านปัจจุบัน</label>
+      <input id="admin-current-password" type="password" class="field" autocomplete="current-password">
+    </div>
+    <div class="mb-3">
+      <label class="block text-sm font-semibold mb-1">รหัสผ่านใหม่</label>
+      <input id="admin-new-password" type="password" class="field" autocomplete="new-password">
+      <p class="text-xs text-gray-500 mt-1" id="admin-password-hint">รหัสผ่านต้องมีตัวเลขอย่างน้อย 4 ตัว และตัวอักษรอย่างน้อย 2 ตัว</p>
+    </div>
+    <div class="mb-3">
+      <label class="block text-sm font-semibold mb-1">ยืนยันรหัสผ่านใหม่</label>
+      <input id="admin-confirm-password" type="password" class="field" autocomplete="new-password">
+    </div>
+    <button onclick="changeOwnPassword()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white btn">💾 บันทึกรหัสผ่านใหม่</button>
+  </div>
+
+  <div class="card p-6 max-w-xl mx-auto mt-6">
+    <h3 class="text-lg font-semibold mb-3">👥 ผู้ดูแลระบบ</h3>
+    <div id="admin-accounts-list"><div class="text-sm text-gray-500">กำลังโหลด...</div></div>
+    <div class="mt-4 pt-4 border-t border-gray-200">
+      <p class="text-sm font-semibold mb-2">➕ เพิ่มผู้ดูแลระบบคนใหม่</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm mb-1">ชื่อผู้ใช้</label>
+          <input id="admin-add-username" type="text" class="field" autocomplete="off" placeholder="เช่น teacher2">
+        </div>
+        <div>
+          <label class="block text-sm mb-1">รหัสผ่าน</label>
+          <input id="admin-add-password" type="password" class="field" autocomplete="new-password" placeholder="เช่น bnk123456">
+        </div>
+      </div>
+      <button onclick="addAdminAccount()" class="w-full bg-blue-600 hover:bg-blue-700 text-white btn mt-3">➕ เพิ่มผู้ดูแลระบบ</button>
+    </div>
+  </div>
+
+  <div class="card p-6 max-w-xl mx-auto mt-6">
+    <h3 class="text-lg font-semibold mb-3">🤝 การใช้งานพร้อมกันหลายคน</h3>
+    <ul class="text-sm text-gray-700 list-disc pl-5 space-y-1">
+      <li>ผู้ดูแลระบบแต่ละคนเข้าสู่ระบบพร้อมกันได้ด้วยบัญชีของตัวเอง</li>
+      <li>ทุกการบันทึกเข้าคิวด้วย Lock ของระบบ — ไม่เขียนทับกันกลางทาง</li>
+      <li>ก่อนแก้ไข/ลบ ระบบตรวจว่าแถวข้อมูลยังตรงกับที่เห็น ถ้ามีคนอื่นแก้ก่อนจะแจ้งให้โหลดใหม่</li>
+      <li>หลังบันทึก ระบบล้างแคชและโหลดข้อมูลล่าสุดจากชีตให้ทันที</li>
+    </ul>
   </div>
 
   <div class="card p-6 max-w-xl mx-auto mt-6">
@@ -1313,7 +1373,7 @@ function showPage(id) {
     else refreshPeriodLocks();
   }
   if (id === 'manage-data') showManageMode('students');
-  if (id === 'admin') { loadAdminInfo(); renderAnalyticsConsent(); }
+  if (id === 'admin') { loadAdminInfo(); loadAdminAccounts(); renderAnalyticsConsent(); }
   setActiveNav(id);
   trackEvent('screen_viewed', { screen: id });
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2688,7 +2748,7 @@ function getDateRange() {
 let statsMode = 'overview';   // 'overview' | 'student'
 let lastStatsReport = null;
 
-const STATS_MODES = ['overview', 'classroom', 'school', 'ranking', 'activity', 'summary', 'student'];
+const STATS_MODES = ['overview', 'classroom', 'school', 'ranking', 'activity', 'summary', 'daily', 'student'];
 
 function setStatsMode(mode) {
   statsMode = STATS_MODES.includes(mode) ? mode : 'overview';
@@ -2699,6 +2759,7 @@ function setStatsMode(mode) {
     if (tab) tab.className = statsMode === m ? active : idle;
   });
   if (statsMode === 'student') updateStatsStudentDropdown();
+  if (statsMode === 'daily') ensureDailyDay();
   syncStatsFilters();
   loadStatistics();
 }
@@ -2707,7 +2768,7 @@ function onStatsClassChange() {
   updateStatsSubjectDropdown();
   updateStatsStudentDropdown();
   fillStatsFocusSelect();
-  if (statsMode === 'classroom' || statsMode === 'school' || statsMode === 'ranking' || statsMode === 'activity' || statsMode === 'summary') loadStatistics();
+  if (statsMode === 'classroom' || statsMode === 'school' || statsMode === 'ranking' || statsMode === 'activity' || statsMode === 'summary' || statsMode === 'daily') loadStatistics();
 }
 
 function updateStatsStudentDropdown() {
@@ -3167,12 +3228,15 @@ function syncStatsFilters() {
     btn.classList.toggle('hidden', allowed.indexOf(v) < 0);
   });
 
-  const dayMode = (mode === 'classroom' || mode === 'school') && view === 'period';
+  const dailyPick = mode === 'daily' ? dailyRangeMode() : '';
+  const dayMode = ((mode === 'classroom' || mode === 'school') && view === 'period')
+    || (mode === 'daily' && dailyPick !== 'custom' && dailyPick !== 'all');
   const rangeMode = !dayMode;
   const show = (id, on) => document.getElementById(id)?.classList.toggle('hidden', !on);
 
+  show('stats-daily-mode-wrap', mode === 'daily');
   show('stats-day-wrap', dayMode);
-  show('stats-range-wrap', rangeMode);
+  show('stats-range-wrap', rangeMode && mode !== 'daily');
   show('stats-class-wrap', mode !== 'school' || view === 'subject');
   show('stats-subject-wrap', mode === 'overview' || mode === 'student' || mode === 'ranking' || (mode === 'classroom' && (view === 'custom' || view === 'subject')));
   show('stats-focus-wrap', mode === 'activity' || mode === 'summary');
@@ -3182,7 +3246,8 @@ function syncStatsFilters() {
   show('stats-export-wrap', true);
 
   const rangeSelect = document.getElementById('stats-period');
-  if (rangeMode && rangeSelect && rangeSelect.value === 'custom') toggleCustomDate();
+  if (mode === 'daily') show('custom-date-range', dailyPick === 'custom');
+  else if (rangeMode && rangeSelect && rangeSelect.value === 'custom') toggleCustomDate();
   else show('custom-date-range', false);
 
   if (dayMode) statsDayValue();
@@ -4611,6 +4676,471 @@ function renderSchoolSummary(rep) {
   return html;
 }
 
+/* ────────────────────────────────────────────────
+   สถิติ “รายวัน (Status)” — สรุปสถานะ มา / สาย / ลา / ขาด
+   กติกา:
+   • “ลา” ไม่ถูกนับ/ไม่หักคะแนน (ตัดออกจากตัวหารของอัตรามาเรียน)
+   • ถ้ารายการของวันนั้นเป็น “สาย” ทั้งหมด → สถานะวันเป็น “สาย”
+   • ถ้า “ขาด” แต่มีการเช็คชื่อว่า “มา” ในวันนั้น → กิจกรรม “สติเคารพฯ” ปรับเป็น “สาย”
+     และสรุปสถานะวันเป็น “มาเรียน” พร้อมหมายเหตุ “สาย”
+   • วิชาอื่น ๆ คงสถานะตามที่เช็คไว้ตามเดิม
+   ──────────────────────────────────────────────── */
+const DAILY_LATE_ACTIVITY = 'สติเคารพฯ';
+
+function ensureDailyDay() {
+  const el = document.getElementById('stats-day');
+  if (!el) return;
+  const cur = dateFieldValue(el);
+  if (cur && allData.attendance.some(r => r.attendance_date === cur)) return;
+  const dates = [...new Set(allData.attendance.map(r => r.attendance_date))].sort();
+  if (dates.length) setDateField(el, dates[dates.length - 1]);
+  else if (!cur) setDateField(el, todayThaiStr());
+}
+
+function dailyStatusRank(s) {
+  return s === 'มา' ? 3 : s === 'สาย' ? 2 : s === 'ลา' ? 1 : 0;
+}
+
+function dailyRangeMode() {
+  return document.getElementById('stats-daily-mode')?.value || 'day';
+}
+
+function isoOfDate(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function dailyRangeOf(mode, day) {
+  if (mode === 'all') return null;
+  if (mode === 'week') {
+    const d = new Date(day + 'T00:00:00');
+    const shift = (d.getDay() + 6) % 7;            // จันทร์ = 0
+    const start = new Date(d); start.setDate(d.getDate() - shift);
+    const end = new Date(start); end.setDate(start.getDate() + 6);
+    return { start: isoOfDate(start), end: isoOfDate(end) };
+  }
+  if (mode === 'month') {
+    const parts = day.split('-').map(Number);
+    const lastDay = new Date(parts[0], parts[1], 0).getDate();
+    return { start: `${parts[0]}-${pad2(parts[1])}-01`, end: `${parts[0]}-${pad2(parts[1])}-${pad2(lastDay)}` };
+  }
+  if (mode === 'custom') {
+    const s = dateFieldValue(document.getElementById('start-date')) || day;
+    const e = dateFieldValue(document.getElementById('end-date')) || s;
+    return s <= e ? { start: s, end: e } : { start: e, end: s };
+  }
+  return { start: day, end: day };
+}
+
+function onDailyModeChange() {
+  const mode = dailyRangeMode();
+  if (mode === 'custom') {
+    const sEl = document.getElementById('start-date');
+    const eEl = document.getElementById('end-date');
+    const day = statsDayValue();
+    if (sEl && !dateFieldValue(sEl)) setDateField(sEl, day);
+    if (eEl && !dateFieldValue(eEl)) setDateField(eEl, day);
+  }
+  syncStatsFilters();
+  loadStatistics();
+}
+
+// แถวของนักเรียน 1 คนใน 1 วัน (ใช้กติกาทั้งหมดของแท็บนี้)
+function buildDailyDayRow(dayRecs) {
+  const acts = {};
+  ACTIVITY_DEFS.forEach(a => { acts[a.key] = ''; });
+  dayRecs.forEach(r => {
+    const def = activityOf(r.attendance_subject);
+    if (!def) return;
+    if (!acts[def.key] || dailyStatusRank(r.attendance_status) > dailyStatusRank(acts[def.key])) {
+      acts[def.key] = r.attendance_status;
+    }
+  });
+
+  const present = dayRecs.some(r => r.attendance_status === 'มา' || r.attendance_status === 'สาย');
+  const notes = [];
+  let late = false;
+
+  if (acts[DAILY_LATE_ACTIVITY] === 'ขาด' && present) {
+    acts[DAILY_LATE_ACTIVITY] = 'สาย';
+    late = true;
+    notes.push(`ขาด “${DAILY_LATE_ACTIVITY}” แต่มีเช็คชื่อมาในวันนี้ → ปรับเป็น “สาย”`);
+  }
+
+  let status = '';
+  if (present) {
+    const allLate = dayRecs.length > 0 && dayRecs.every(r => r.attendance_status === 'สาย');
+    if (allLate) {
+      status = 'สาย';
+      notes.push('เช็คชื่อของวันนี้เป็น “สาย” ทั้งหมด');
+    } else {
+      status = 'มา';
+    }
+  } else if (dayRecs.some(r => r.attendance_status === 'ลา')) {
+    status = 'ลา';
+  } else if (dayRecs.some(r => r.attendance_status === 'ขาด')) {
+    status = 'ขาด';
+  }
+
+  if (status === 'ลา') notes.push('ลา — ไม่นับ/ไม่หักคะแนน');
+  if (status === 'ขาด') notes.push('ขาดทั้งวัน (ไม่มีการเช็คชื่อว่า มา/สาย)');
+  if (status === 'มา' && !late) {
+    const absentActs = ACTIVITY_DEFS.filter(a => acts[a.key] === 'ขาด').map(a => a.key);
+    if (absentActs.length) notes.push(`ขาดกิจกรรม: ${absentActs.join(' · ')}`);
+  }
+  if (!status) notes.push('ไม่มีการเช็คชื่อในวันนี้');
+
+  return { acts, status, late, recs: dayRecs.length, notes: notes.join(' · ') };
+}
+
+function buildDailyStatusReport() {
+  const clsEl = document.getElementById('stats-class');
+  const cls = normalizeClass(clsEl?.value || '');
+  const clsLabel = clsEl && clsEl.value ? clsEl.value : '';
+  const pick = dailyRangeMode();
+
+  let day = statsDayValue();
+  if (day && !allData.attendance.some(r => r.attendance_date === day) && allData.attendance.length) {
+    const ds = [...new Set(allData.attendance.map(r => r.attendance_date))].sort();
+    day = ds[ds.length - 1];
+    setDateField(document.getElementById('stats-day'), day);
+  }
+
+  const range = dailyRangeOf(pick, day);
+  const periodLabel = range ? rangeLabelOf(range) : 'ทั้งหมด';
+  const rangeMode = pick !== 'day';
+  const inRange = r => !range || (r.attendance_date >= range.start && r.attendance_date <= range.end);
+  const recs = allData.attendance.filter(r => inRange(r) && (!cls || attendanceMatchesClass(r, cls)));
+
+  const byKey = new Map();
+  recs.forEach(r => {
+    const c = r._cls || normalizeClass(r.attendance_student_class);
+    const key = c + '|' + String(r.attendance_student_id);
+    let v = byKey.get(key);
+    if (!v) { v = { cls: c, id: String(r.attendance_student_id), byDate: new Map() }; byKey.set(key, v); }
+    if (!v.byDate.has(r.attendance_date)) v.byDate.set(r.attendance_date, []);
+    v.byDate.get(r.attendance_date).push(r);
+  });
+
+  // นับสถานะรายวันของทุกคน (ใช้ทำชีต/ตาราง “ตามวันที่”)
+  const perDate = new Map();   // date -> { มา, สาย, ลา, ขาด, ไม่มีข้อมูล, late }
+
+  const rows = [];
+  const addStudent = (c, id, name, entry) => {
+    const dates = entry ? [...entry.byDate.keys()].sort() : [];
+    if (!rangeMode) {
+      const dr = buildDailyDayRow(entry ? (entry.byDate.get(day) || []) : []);
+      rows.push({ cls: c, id: String(id), name, acts: dr.acts, status: dr.status, late: dr.late, notes: dr.notes, recs: dr.recs, days: 1 });
+      return;
+    }
+    const acts = {};
+    ACTIVITY_DEFS.forEach(a => { acts[a.key] = { มา: 0, สาย: 0, ลา: 0, ขาด: 0 }; });
+    const dayStatus = { มา: 0, สาย: 0, ลา: 0, ขาด: 0, 'ไม่มีข้อมูล': 0 };
+    let lateDays = 0;
+    let totalRecs = 0;
+    dates.forEach(d => {
+      const dr = buildDailyDayRow(entry.byDate.get(d));
+      totalRecs += dr.recs;
+      if (dayStatus[dr.status || 'ไม่มีข้อมูล'] !== undefined) dayStatus[dr.status || 'ไม่มีข้อมูล']++;
+      if (dr.late) lateDays++;
+      ACTIVITY_DEFS.forEach(a => {
+        const s = dr.acts[a.key];
+        if (s && acts[a.key][s] !== undefined) acts[a.key][s]++;
+      });
+      const pdKey = d;
+      if (!perDate.has(pdKey)) perDate.set(pdKey, { มา: 0, สาย: 0, ลา: 0, ขาด: 0, 'ไม่มีข้อมูล': 0, late: 0 });
+      const pd = perDate.get(pdKey);
+      pd[dr.status || 'ไม่มีข้อมูล']++;
+      if (dr.late) pd.late++;
+    });
+    if (!dates.length) dayStatus['ไม่มีข้อมูล']++;
+    const notes = [];
+    if (lateDays) notes.push(`ปรับจากขาดเป็นสาย ${lateDays} วัน`);
+    if (dayStatus.สาย) notes.push(`สาย ${dayStatus.สาย} วัน`);
+    if (dayStatus.ลา) notes.push(`ลา ${dayStatus.ลา} วัน`);
+    if (dayStatus.ขาด) notes.push(`ขาด ${dayStatus.ขาด} วัน`);
+    if (dayStatus['ไม่มีข้อมูล']) notes.push(`ไม่มีข้อมูล ${dayStatus['ไม่มีข้อมูล']} วัน`);
+    rows.push({ cls: c, id: String(id), name, acts, status: '', dayStatus, lateDays, notes: notes.join(' · '), recs: totalRecs, days: dates.length });
+  };
+
+  let students = (allData.students || []).slice();
+  if (cls) students = students.filter(s => normalizeClass(s.student_class) === cls);
+  students = students.sort((a, b) =>
+    activityClassOrder(normalizeClass(a.student_class)) - activityClassOrder(normalizeClass(b.student_class)) ||
+    String(a.student_id).localeCompare(String(b.student_id), undefined, { numeric: true }));
+
+  students.forEach(st => {
+    const c = normalizeClass(st.student_class);
+    const key = c + '|' + String(st.student_id);
+    addStudent(c, st.student_id, st.student_name, byKey.get(key));
+  });
+
+  byKey.forEach((v, key) => {
+    if (students.some(st => normalizeClass(st.student_class) + '|' + String(st.student_id) === key)) return;
+    const st = findStudentRecord(v.id, v.cls);
+    addStudent(v.cls, v.id, st ? st.student_name : '(ไม่พบชื่อในทะเบียน)', v);
+  });
+
+  const tally = { มา: 0, สาย: 0, ลา: 0, ขาด: 0, 'ไม่มีข้อมูล': 0, lateAdjusted: 0 };
+  rows.forEach(r => {
+    if (rangeMode) {
+      Object.keys(r.dayStatus).forEach(k => {
+        if (tally[k] !== undefined) tally[k] += r.dayStatus[k];
+      });
+      tally.lateAdjusted += r.lateDays;
+    } else {
+      tally[r.status || 'ไม่มีข้อมูล']++;
+      if (r.late) tally.lateAdjusted++;
+    }
+  });
+
+  const counted = tally.มา + tally.สาย + tally.ขาด;
+  const rate = counted ? ((tally.มา + tally.สาย) / counted) * 100 : 0;
+
+  const actTotals = ACTIVITY_DEFS.map(a => {
+    const t = { key: a.key, มา: 0, สาย: 0, ลา: 0, ขาด: 0, none: 0 };
+    rows.forEach(r => {
+      if (rangeMode) {
+        t.มา += r.acts[a.key].มา; t.สาย += r.acts[a.key].สาย;
+        t.ลา += r.acts[a.key].ลา; t.ขาด += r.acts[a.key].ขาด;
+      } else {
+        const s = r.acts[a.key];
+        if (s) t[s]++; else t.none++;
+      }
+    });
+    return t;
+  });
+
+  const dateRows = [...perDate.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, t]) => ({ date, ...t }));
+
+  const unit = rangeMode ? 'คน-วัน' : 'คน';
+  const statusSheetRows = [
+    ['มา', tally.มา, pctText(tally.มา, counted), 'นับเป็นมาเรียน'],
+    ['สาย', tally.สาย, pctText(tally.สาย, counted), 'นับเป็นมาเรียน (สายทั้งวันหรือทุกวิชาเป็นสาย)'],
+    ['ลา', tally.ลา, '—', 'ไม่นับ/ไม่หักคะแนน'],
+    ['ขาด', tally.ขาด, pctText(tally.ขาด, counted), 'ไม่มีการเช็คชื่อว่า มา/สาย'],
+    ['ไม่มีข้อมูล', tally['ไม่มีข้อมูล'], '—', 'ไม่มีการเช็คชื่อ'],
+    [`รวมที่นับ (มา+สาย+ขาด)`, counted, '100%', 'อัตรามาเรียน ' + rate.toFixed(1) + '%']
+  ];
+
+  return {
+    mode: 'daily',
+    day: rangeMode ? null : day, pick, rangeMode, range, periodLabel,
+    cls, clsLabel, dateRows,
+    rows, tally, rate, actTotals,
+    totalRec: recs.length,
+    generatedAt: new Date(),
+    metaLines: [
+      cls ? `ขอบเขต: ชั้น ${clsLabel}` : 'ขอบเขต: ทั้งโรงเรียน',
+      rangeMode
+        ? `ช่วงเวลา: ${periodLabel} (${pick === 'week' ? 'รายสัปดาห์' : pick === 'month' ? 'รายเดือน' : pick === 'custom' ? 'กำหนดเอง' : 'ทั้งหมด'})`
+        : `วันที่: ${fmtThaiDate(day)}`,
+      'กติกา: “ลา” ไม่ถูกนับ/ไม่หักคะแนน · ถ้าทุกวิชาของวันเป็น “สาย” → สถานะวันเป็น “สาย” · ถ้า “ขาด” แต่มีเช็คชื่อว่า “มา” → กิจกรรม “' + DAILY_LATE_ACTIVITY + '” ปรับเป็น “สาย” และสรุปวันเป็นมาเรียน (หมายเหตุ สาย) · วิชาอื่นคงสถานะเดิม',
+      `รายการเช็คชื่อ: ${recs.length} · นักเรียน: ${rows.length}`,
+      `สถานะ — มา ${tally.มา} · สาย ${tally.สาย} · ลา ${tally.ลา} · ขาด ${tally.ขาด} · ไม่มีข้อมูล ${tally['ไม่มีข้อมูล']}`,
+      `อัตรามาเรียน (ไม่นับ ลา): ${rate.toFixed(1)}% · ปรับจากขาดเป็นสาย: ${tally.lateAdjusted} ${unit}`
+    ],
+    sheets: rangeMode ? [
+      { name: 'สรุปสถานะ', headers: ['สถานะ', 'จำนวน (คน-วัน)', 'เปอร์เซ็นต์', 'หมายเหตุ'], rows: statusSheetRows },
+      {
+        name: 'รายชื่อนักเรียน',
+        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', 'มา', 'สาย', 'ลา', 'ขาด', 'ไม่มีข้อมูล',
+          ...ACTIVITY_DEFS.map(a => a.key + ' (ม/ส/ล/ข)'), 'หมายเหตุ'],
+        rows: rows.map(r => [
+          r.cls, r.id, r.name,
+          r.dayStatus.มา, r.dayStatus.สาย, r.dayStatus.ลา, r.dayStatus.ขาด, r.dayStatus['ไม่มีข้อมูล'],
+          ...ACTIVITY_DEFS.map(a => `${r.acts[a.key].มา}/${r.acts[a.key].สาย}/${r.acts[a.key].ลา}/${r.acts[a.key].ขาด}`),
+          r.notes
+        ])
+      },
+      {
+        name: 'ตามวันที่',
+        headers: ['วันที่', 'มา', 'สาย', 'ลา', 'ขาด', 'ไม่มีข้อมูล', 'ปรับเป็นสาย'],
+        rows: dateRows.map(d => [fmtThaiDate(d.date), d.มา, d.สาย, d.ลา, d.ขาด, d['ไม่มีข้อมูล'], d.late])
+      },
+      {
+        name: 'สรุปตามกิจกรรม',
+        headers: ['กิจกรรม', 'มา', 'สาย', 'ลา', 'ขาด'],
+        rows: actTotals.map(t => [t.key, t.มา, t.สาย, t.ลา, t.ขาด])
+      }
+    ] : [
+      { name: 'สรุปสถานะวัน', headers: ['สถานะ', 'จำนวน (คน)', 'เปอร์เซ็นต์', 'หมายเหตุ'], rows: statusSheetRows },
+      {
+        name: 'รายชื่อนักเรียน',
+        headers: ['ชั้น', 'เลขที่', 'ชื่อ-สกุล', ...ACTIVITY_DEFS.map(a => a.key), 'สถานะวัน', 'หมายเหตุ'],
+        rows: rows.map(r => [r.cls, r.id, r.name,
+          ...ACTIVITY_DEFS.map(a => r.acts[a.key] || '-'),
+          r.status || '-', r.notes])
+      },
+      {
+        name: 'สรุปตามกิจกรรม',
+        headers: ['กิจกรรม', 'มา', 'สาย', 'ลา', 'ขาด', 'ไม่เช็คชื่อ'],
+        rows: actTotals.map(t => [t.key, t.มา, t.สาย, t.ลา, t.ขาด, t.none])
+      }
+    ]
+  };
+}
+
+function dailyBadge(status, late) {
+  if (!status) return '<span class="text-gray-300">–</span>';
+  const cls = status === 'มา' ? 'bg-emerald-100 text-emerald-700'
+    : status === 'สาย' ? 'bg-amber-100 text-amber-700'
+    : status === 'ลา' ? 'bg-sky-100 text-sky-700'
+    : 'bg-rose-100 text-rose-700';
+  const extra = late && status === 'มา'
+    ? '<span class="ml-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1">สาย</span>'
+    : '';
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${cls}">${status}</span>${extra}`;
+}
+
+function dailyCountCell(c) {
+  if (!c || (!c.มา && !c.สาย && !c.ลา && !c.ขาด)) return '<span class="text-gray-300">–</span>';
+  return `<span class="text-[11px] leading-5 whitespace-nowrap">
+    <span class="text-green-700 font-bold">ม ${c.มา}</span> · <span class="text-amber-700">ส ${c.สาย}</span><br>
+    <span class="text-blue-700">ล ${c.ลา}</span> · <span class="text-red-700">ข ${c.ขาด}</span></span>`;
+}
+
+function dailyStatusSummaryCell(ds) {
+  return `<span class="text-[11px] leading-5 whitespace-nowrap">
+    <span class="text-green-700 font-bold">มา ${ds.มา}</span> · <span class="text-amber-700">สาย ${ds.สาย}</span><br>
+    <span class="text-blue-700">ลา ${ds.ลา}</span> · <span class="text-red-700">ขาด ${ds.ขาด}</span>
+    ${ds['ไม่มีข้อมูล'] ? `<br><span class="text-gray-400">ไม่มีข้อมูล ${ds['ไม่มีข้อมูล']}</span>` : ''}</span>`;
+}
+
+function renderDailyStatus(rep) {
+  const counted = rep.tally.มา + rep.tally.สาย + rep.tally.ขาด;
+  const unit = rep.rangeMode ? 'คน-วัน' : 'คน';
+  const chips = [];
+  chips.push(rep.cls ? `🎓 ${rep.clsLabel}` : '🏢 ทั้งโรงเรียน');
+  if (rep.rangeMode) chips.push(`🗓️ ${rep.periodLabel}`);
+  else chips.push(`📅 ${fmtThaiDate(rep.day)}`);
+
+  let html = `<div class="flex flex-wrap gap-2 justify-center mb-5">
+    ${chips.map(c => `<span class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full font-medium">${esc(c)}</span>`).join('')}
+  </div>
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+    ${statsMetricCard(rep.tally.มา, `มาเรียน<span class="block text-xs font-normal opacity-90">${pctText(rep.tally.มา, counted)} ของที่นับ</span>`, 'from-emerald-500 to-teal-600')}
+    ${statsMetricCard(rep.tally.สาย, `สาย<span class="block text-xs font-normal opacity-90">ทั้งวัน/ทุกวิชาเป็นสาย · ปรับจากขาด ${rep.tally.lateAdjusted} ${unit}</span>`, 'from-amber-400 to-orange-500')}
+    ${statsMetricCard(rep.tally.ลา, `ลา<span class="block text-xs font-normal opacity-90">ไม่นับ/ไม่หักคะแนน</span>`, 'from-sky-500 to-blue-600')}
+    ${statsMetricCard(rep.tally.ขาด, `ขาด<span class="block text-xs font-normal opacity-90">${pctText(rep.tally.ขาด, counted)} ของที่นับ</span>`, 'from-rose-500 to-pink-600')}
+  </div>
+  <div class="bg-blue-50 border border-blue-100 text-blue-800 text-xs rounded-2xl px-4 py-3 mb-5 leading-relaxed">
+    💡 <b>กติกาของแท็บนี้:</b> “ลา” ไม่ถูกนับและไม่หักคะแนน · ถ้าการเช็คชื่อของวันนั้นเป็น <b>“สาย” ทั้งหมด</b> สถานะวันจะเป็น <b>“สาย”</b>
+    · ถ้านักเรียนถูกเช็ค <b>“ขาด”</b> แต่มีการเช็คชื่อว่า <b>“มา”</b> ในวันนั้น ระบบจะปรับกิจกรรม <b>“${esc(DAILY_LATE_ACTIVITY)}”</b> เป็น <b>“สาย”</b>
+    และสรุปสถานะวันเป็น <b>มาเรียน</b> พร้อมหมายเหตุว่า “สาย” · วิชาอื่น ๆ คงสถานะตามที่เช็คไว้
+    · อัตรามาเรียน (${rep.rate.toFixed(1)}%) คิดจาก มา + สาย ÷ (มา + สาย + ขาด)
+  </div>`;
+
+  if (!rep.rows.length) {
+    return html + statsEmpty('📅', 'ยังไม่มีข้อมูลของช่วงเวลาที่เลือก', 'ลองเปลี่ยนช่วงเวลาหรือเลือกวันอื่น');
+  }
+
+  if (rep.rangeMode) {
+    html += `<div class="table-scroll mb-4">
+      <table class="data-table" style="min-width:${980 + ACTIVITY_DEFS.length * 90}px">
+        <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+          <th class="px-3 py-3">ชั้น</th>
+          <th class="px-3 py-3">เลขที่</th>
+          <th class="px-3 py-3 text-left">ชื่อ-สกุล</th>
+          ${ACTIVITY_DEFS.map(a => `<th class="px-3 py-3">${esc(a.key)}<br><span class="text-[11px] font-normal opacity-90">(ม / ส / ล / ข)</span></th>`).join('')}
+          <th class="px-3 py-3">สรุปสถานะ<br><span class="text-[11px] font-normal opacity-90">(วัน)</span></th>
+          <th class="px-3 py-3 text-left">หมายเหตุ</th>
+        </tr></thead>
+        <tbody>
+        ${rep.rows.map(r => `<tr class="hover:bg-red-50">
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(r.cls)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(r.id)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 font-semibold">${esc(r.name)}</td>
+          ${ACTIVITY_DEFS.map(a => `<td class="px-3 py-2.5 border-b border-gray-100 text-center">${dailyCountCell(r.acts[a.key])}</td>`).join('')}
+          <td class="px-3 py-2.5 border-b border-gray-100 text-center">${dailyStatusSummaryCell(r.dayStatus)}</td>
+          <td class="px-3 py-2.5 border-b border-gray-100 text-xs text-gray-600">${esc(r.notes)}</td>
+        </tr>`).join('')}
+        </tbody>
+        <tfoot><tr class="bg-gray-50 font-bold text-gray-800">
+          <td class="px-3 py-2.5" colspan="3">รวม ${rep.rows.length} คน</td>
+          ${rep.actTotals.map(t => `<td class="px-3 py-2.5 text-center text-xs font-normal">
+            <span class="text-green-700">ม ${t.มา}</span> · <span class="text-amber-700">ส ${t.สาย}</span><br>
+            <span class="text-blue-700">ล ${t.ลา}</span> · <span class="text-red-700">ข ${t.ขาด}</span>
+          </td>`).join('')}
+          <td class="px-3 py-2.5 text-center text-xs font-normal">
+            <span class="text-green-700">มา ${rep.tally.มา}</span> · <span class="text-amber-700">สาย ${rep.tally.สาย}</span><br>
+            <span class="text-blue-700">ลา ${rep.tally.ลา}</span> · <span class="text-red-700">ขาด ${rep.tally.ขาด}</span>
+          </td>
+          <td class="px-3 py-2.5 text-xs font-normal text-gray-600">ไม่มีข้อมูล ${rep.tally['ไม่มีข้อมูล']} คน-วัน</td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+
+    if (rep.dateRows && rep.dateRows.length) {
+      html += `<h3 class="text-lg font-bold text-gray-800 mb-3">📅 สรุปตามวันที่</h3>
+      <div class="table-scroll mb-4">
+        <table class="data-table" style="min-width:760px">
+          <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+            <th class="px-3 py-3">วันที่</th>
+            <th class="px-3 py-3">มา</th>
+            <th class="px-3 py-3">สาย</th>
+            <th class="px-3 py-3">ลา</th>
+            <th class="px-3 py-3">ขาด</th>
+            <th class="px-3 py-3">ไม่มีข้อมูล</th>
+            <th class="px-3 py-3">ปรับเป็นสาย</th>
+          </tr></thead>
+          <tbody>
+          ${rep.dateRows.map(d => `<tr class="hover:bg-red-50">
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center font-semibold">${esc(fmtThaiDate(d.date))}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-green-700 font-semibold">${d.มา}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-amber-700 font-semibold">${d.สาย}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-blue-700 font-semibold">${d.ลา}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-red-700 font-semibold">${d.ขาด}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center text-gray-500">${d['ไม่มีข้อมูล']}</td>
+            <td class="px-3 py-2.5 border-b border-gray-100 text-center">${d.late}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    }
+
+    html += `<p class="text-xs text-gray-500 mt-3">💡 ไฟล์ส่งออกมี 4 ชีต: “สรุปสถานะ” · “รายชื่อนักเรียน” · “ตามวันที่” · “สรุปตามกิจกรรม”</p>`;
+    return html;
+  }
+
+  html += `<div class="table-scroll mb-4">
+    <table class="data-table" style="min-width:${900 + ACTIVITY_DEFS.length * 90}px">
+      <thead><tr class="bg-gradient-to-r from-red-600 to-rose-500 text-white">
+        <th class="px-3 py-3">ชั้น</th>
+        <th class="px-3 py-3">เลขที่</th>
+        <th class="px-3 py-3 text-left">ชื่อ-สกุล</th>
+        ${ACTIVITY_DEFS.map(a => `<th class="px-3 py-3">${esc(a.key)}</th>`).join('')}
+        <th class="px-3 py-3">สถานะวัน</th>
+        <th class="px-3 py-3 text-left">หมายเหตุ</th>
+      </tr></thead>
+      <tbody>
+      ${rep.rows.map(r => `<tr class="hover:bg-red-50">
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(r.cls)}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center">${esc(r.id)}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 font-semibold">${esc(r.name)}</td>
+        ${ACTIVITY_DEFS.map(a => `<td class="px-3 py-2.5 border-b border-gray-100 text-center">${dailyBadge(r.acts[a.key], r.late)}</td>`).join('')}
+        <td class="px-3 py-2.5 border-b border-gray-100 text-center">${dailyBadge(r.status, r.late)}</td>
+        <td class="px-3 py-2.5 border-b border-gray-100 text-xs text-gray-600">${esc(r.notes)}</td>
+      </tr>`).join('')}
+      </tbody>
+      <tfoot><tr class="bg-gray-50 font-bold text-gray-800">
+        <td class="px-3 py-2.5" colspan="3">รวม ${rep.rows.length} คน</td>
+        ${rep.actTotals.map(t => `<td class="px-3 py-2.5 text-center text-xs font-normal">
+          <span class="text-green-700">ม ${t.มา}</span> · <span class="text-amber-700">ส ${t.สาย}</span><br>
+          <span class="text-blue-700">ล ${t.ลา}</span> · <span class="text-red-700">ข ${t.ขาด}</span>
+        </td>`).join('')}
+        <td class="px-3 py-2.5 text-center text-xs">
+          <span class="text-green-700">มา ${rep.tally.มา}</span> · <span class="text-amber-700">สาย ${rep.tally.สาย}</span><br>
+          <span class="text-blue-700">ลา ${rep.tally.ลา}</span> · <span class="text-red-700">ขาด ${rep.tally.ขาด}</span>
+        </td>
+        <td class="px-3 py-2.5 text-xs font-normal text-gray-600">ไม่มีข้อมูล ${rep.tally['ไม่มีข้อมูล']} คน</td>
+      </tr></tfoot>
+    </table>
+  </div>
+  <p class="text-xs text-gray-500 mt-3">💡 ไฟล์ส่งออกมี 3 ชีต: “สรุปสถานะวัน” · “รายชื่อนักเรียน” · “สรุปตามกิจกรรม”</p>`;
+  return html;
+}
+
 function loadStatistics() {
   const c = document.getElementById('statistics-content');
   if (statsMode === 'summary') {
@@ -4625,6 +5155,13 @@ function loadStatistics() {
     lastStatsReport = actRep;
     if (!c) return;
     c.innerHTML = renderActivity(actRep);
+    return;
+  }
+  if (statsMode === 'daily') {
+    const dailyRep = buildDailyStatusReport();
+    lastStatsReport = dailyRep;
+    if (!c) return;
+    c.innerHTML = renderDailyStatus(dailyRep);
     return;
   }
   if (statsMode === 'ranking') {
@@ -4901,6 +5438,9 @@ function statsFileName(rep, ext) {
     } else if (rep.mode === 'summary') {
       parts.push('สรุปกิจกรรม-วิชา');
       if (rep.cls) parts.push(rep.clsLabel);
+    } else if (rep.mode === 'daily') {
+      parts.push('รายวัน-สถานะ');
+      if (rep.cls) parts.push(rep.clsLabel);
     } else if (rep.mode === 'school') {
       parts.push('ทั้งโรงเรียน');
       if (rep.cls) parts.push(rep.clsLabel);
@@ -5146,6 +5686,150 @@ async function loadAdminInfo() {
     sheetEl.textContent = `${info.sheetId} — "${info.name}" (${info.tabs} แท็บ)`;
   } catch (err) {
     sheetEl.textContent = 'ตรวจสอบไม่ได้: ' + err.message;
+  }
+}
+
+/* ---------- บัญชีผู้ดูแลระบบ (ใช้พร้อมกันหลายคน) ---------- */
+function adminAccountLabel(role) {
+  return role === 'owner' ? 'เจ้าของระบบ' : 'ผู้ดูแลระบบ';
+}
+
+async function loadAdminAccounts() {
+  const box = document.getElementById('admin-accounts-list');
+  const me = document.getElementById('admin-account-current');
+  if (me) me.textContent = authUsername || '-';
+  if (!box) return;
+  box.innerHTML = '<div class="text-sm text-gray-500">กำลังโหลด...</div>';
+  try {
+    renderAdminAccounts(await callApi('listAdmins'));
+  } catch (err) {
+    box.innerHTML = `<div class="text-sm text-red-600">${esc(err.message)}</div>`;
+  }
+}
+
+function renderAdminAccounts(info) {
+  const box = document.getElementById('admin-accounts-list');
+  if (!box || !info) return;
+  const minDigits = info.minPasswordDigits || 4;
+  const minLetters = info.minPasswordLetters || 2;
+  const hint = document.getElementById('admin-password-hint');
+  if (hint) hint.textContent = `รหัสผ่านต้องมีตัวเลขอย่างน้อย ${minDigits} ตัว และตัวอักษรอย่างน้อย ${minLetters} ตัว`;
+  const current = String(info.current || '').toLowerCase();
+  const rows = (info.admins || []).map(a => {
+    const isMe = String(a.username).toLowerCase() === current;
+    const isOwner = a.role === 'owner';
+    const action = (isMe || isOwner)
+      ? `<span class="text-xs text-gray-400">${isMe ? 'บัญชีที่ใช้อยู่' : 'บัญชีหลัก'}</span>`
+      : `<button onclick="removeAdminAccount('${esc(a.username)}')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">🗑️ ลบ</button>`;
+    const updated = a.updated_at ? new Date(a.updated_at).toLocaleString('th-TH') : '-';
+    return `<tr class="hover:bg-gray-50">
+      <td class="border px-3 py-2 font-semibold">${esc(a.username)}${isMe ? ' <span class="text-xs text-green-600">(คุณ)</span>' : ''}</td>
+      <td class="border px-3 py-2 text-center text-xs">${esc(adminAccountLabel(a.role))}</td>
+      <td class="border px-3 py-2 text-center text-xs">${esc(updated)}</td>
+      <td class="border px-3 py-2 text-center">${action}</td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = `
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr class="bg-gradient-to-r from-gray-700 to-gray-500 text-white">
+          <th class="border px-3 py-2 text-left">ชื่อผู้ใช้</th>
+          <th class="border px-3 py-2">สิทธิ์</th>
+          <th class="border px-3 py-2">แก้ไขรหัสล่าสุด</th>
+          <th class="border px-3 py-2">จัดการ</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="text-xs text-gray-500 mt-2">🔓 ทุกบัญชีมีสิทธิ์แก้ไขข้อมูลเท่ากัน และเข้าใช้งานพร้อมกันได้ (แต่ละคนมี session ของตัวเอง)</p>`;
+}
+
+// ตรวจรหัสผ่านตามกติกา: ตัวเลข >= 4 ตัว และตัวอักษร >= 2 ตัว (คืน '' ถ้าผ่าน)
+// แปลง error จากเซิร์ฟเวอร์ให้เป็นคำแนะนำที่ทำตามได้
+function adminFriendlyError(err) {
+  const msg = String((err && err.message) || err || '');
+  if (msg.indexOf('ไม่รู้จัก action') !== -1) {
+    return 'เซิร์ฟเวอร์ (Cod.gs) ที่เรียกใช้อยู่ยังเป็นเวอร์ชันเก่า จึงยังไม่มีคำสั่งเพิ่มผู้ดูแลระบบ<br><br>'
+      + '<span class="text-xs">วิธีแก้: เปิด Apps Script → Deploy → Manage deployments → ✏️ → Version: <b>New version</b> → Deploy '
+      + '(ต้องแก้ deployment ตัวเดิม ไม่ใช่สร้างใหม่) แล้วรีเฟรชหน้านี้<br>ตรวจเวอร์ชันได้ที่ <code>WEB_APP_URL?action=version</code></span>';
+  }
+  return msg;
+}
+
+function checkAdminPasswordRule(value) {
+  const password = String(value || '');
+  const digits = (password.match(/[0-9]/g) || []).length;
+  const letters = (password.match(/[A-Za-z\u0E00-\u0E7F]/g) || []).length;
+  if (digits < 4 || letters < 2) {
+    return 'รหัสผ่านต้องมีตัวเลขอย่างน้อย 4 ตัว และตัวอักษรอย่างน้อย 2 ตัว';
+  }
+  if (password.length > 100) return 'รหัสผ่านยาวเกิน 100 ตัวอักษร';
+  return '';
+}
+
+async function changeOwnPassword() {
+  const valueOf = id => (document.getElementById(id) || {}).value || '';
+  const current = valueOf('admin-current-password');
+  const next = valueOf('admin-new-password');
+  const confirm = valueOf('admin-confirm-password');
+  if (!current) { Swal.fire('แจ้งเตือน', 'กรุณากรอกรหัสผ่านปัจจุบัน', 'warning'); return; }
+  const nextError = checkAdminPasswordRule(next);
+  if (nextError) { Swal.fire('แจ้งเตือน', nextError, 'warning'); return; }
+  if (next !== confirm) { Swal.fire('แจ้งเตือน', 'รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน', 'warning'); return; }
+  if (next === current) { Swal.fire('แจ้งเตือน', 'รหัสผ่านใหม่ต้องต่างจากรหัสเดิม', 'warning'); return; }
+  showLoading('กำลังเปลี่ยนรหัสผ่าน...');
+  try {
+    await callApi('changePassword', { currentPassword: current, newPassword: next });
+    ['admin-current-password', 'admin-new-password', 'admin-confirm-password'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    notifySuccess('✅ เปลี่ยนรหัสผ่านสำเร็จ', `บัญชี <strong>${esc(authUsername)}</strong> ใช้รหัสใหม่ได้ทันที<br><span class="text-xs">session ที่เปิดอยู่ยังใช้งานต่อได้</span>`);
+    loadAdminAccounts();
+    trackEvent('admin_password_changed');
+  } catch (err) {
+    Swal.fire('ผิดพลาด', adminFriendlyError(err), 'error');
+  }
+}
+
+async function addAdminAccount() {
+  const usernameEl = document.getElementById('admin-add-username');
+  const passwordEl = document.getElementById('admin-add-password');
+  const username = (usernameEl ? usernameEl.value : '').trim();
+  const password = passwordEl ? passwordEl.value : '';
+  if (!username) { Swal.fire('แจ้งเตือน', 'กรุณากรอกชื่อผู้ใช้', 'warning'); return; }
+  if (!password) { Swal.fire('แจ้งเตือน', 'กรุณากรอกรหัสผ่าน', 'warning'); return; }
+  const passwordError = checkAdminPasswordRule(password);
+  if (passwordError) { Swal.fire('แจ้งเตือน', passwordError, 'warning'); return; }
+  showLoading('กำลังเพิ่มผู้ดูแลระบบ...');
+  try {
+    await callApi('addAdmin', { username: username, password: password });
+    if (usernameEl) usernameEl.value = '';
+    if (passwordEl) passwordEl.value = '';
+    notifySuccess('✅ เพิ่มผู้ดูแลระบบแล้ว', `👤 <strong>${esc(username)}</strong> เข้าสู่ระบบด้วยรหัสที่ตั้งไว้ได้ทันที`);
+    loadAdminAccounts();
+    trackEvent('admin_account_added');
+  } catch (err) {
+    Swal.fire('ผิดพลาด', adminFriendlyError(err), 'error');
+  }
+}
+
+async function removeAdminAccount(username) {
+  const r = await Swal.fire({
+    title: 'ลบผู้ดูแลระบบ?',
+    html: `<p><strong>${esc(username)}</strong> จะเข้าสู่ระบบไม่ได้อีก</p>
+      <p class="text-xs text-gray-600 mt-2">session ที่เปิดค้างไว้จะถูกตัดสิทธิ์ทันที</p>`,
+    icon: 'warning', showCancelButton: true, confirmButtonText: 'ลบ', cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#dc2626'
+  });
+  if (!r.isConfirmed) return;
+  showLoading('กำลังลบ...');
+  try {
+    await callApi('removeAdmin', { username: username });
+    notifySuccess('🗑️ ลบผู้ดูแลระบบแล้ว', `👤 ${esc(username)}`);
+    loadAdminAccounts();
+  } catch (err) {
+    Swal.fire('ผิดพลาด', adminFriendlyError(err), 'error');
   }
 }
 

@@ -15,9 +15,17 @@ const AUTH_LOGIN_FAILURE_KEY = 'APP_AUTH_LOGIN_FAILURES';
 const AUTH_LOGIN_FAILURE_LIMIT = 5;
 const AUTH_LOGIN_LOCK_SECONDS = 900;
 // เวอร์ชันโค้ดฝั่งเซิร์ฟเวอร์ — ใช้ตรวจว่า deployment ที่ใช้งานอยู่อัปเดตแล้วหรือยัง
-const APP_CODE_VERSION = '2026-11-17-admin-accounts';
+const APP_CODE_VERSION = '2026-11-18-cache-fix';
 const CLASS_LIST = ['ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6', 'ม.1', 'ม.2', 'ม.3'];
 const ATTENDANCE_STATUS_LIST = ['มา', 'สาย', 'ลา', 'ขาด'];
+
+// action ที่เปลี่ยนข้อมูลจริง → ต้องล้างแคชหลังทำงาน (อ่านอย่างเดียวไม่ต้องล้าง)
+const MUTATING_ACTIONS = new Set([
+  'changePassword', 'addAdmin', 'removeAdmin',
+  'addStudent', 'addBulkStudents', 'updateStudent', 'deleteStudent',
+  'addSubject', 'addBulkSubjects', 'updateSubject', 'deleteSubject',
+  'updateAttendance', 'deleteAttendance', 'updateSheetId'
+]);
 
 // ช่วงเวลาเช็คชื่อประจำวัน — ต้องตรงกับ PERIOD_DEFS ใน index.html
 const ATTENDANCE_PERIOD_LIST = ['07.30-08.10', '08.15-08.20', '08.30-09.00', '09.00-10.00',
@@ -120,22 +128,32 @@ function getSpreadsheet_() {
   return SS_MEMO_;
 }
 
-// ---------- แคชข้อมูลทั้งหมด (แบ่งเป็นก้อน ก้อนละ ≤ 30,000 ตัวอักษร) ----------
+// ---------- แคชข้อมูลทั้งหมด (แบ่งเป็นก้อน ก้อนละ ≤ 25,000 ตัวอักษร) ----------
 const DATA_CACHE_KEY = 'APP_DATA_CACHE_V1';
 const DATA_CACHE_TTL = 600;   // วินาที (มี trigger รีเฟรชทุก 5 นาที ถ้าติดตั้งด้วย installCacheRefreshTrigger)
-const DATA_CACHE_CHUNK = 30000;
+const DATA_CACHE_CHUNK = 25000;      // อักษรไทย 3 ไบต์ → ~75KB/ก้อน ต่ำกว่าเพดาน 100KB/คีย์
+const DATA_CACHE_MAX_CHUNKS = 400;   // ~10M ตัวอักษร (~40,000 แถว) — กันแคชหยุดเงียบเมื่อข้อมูลโต
+const DATA_CACHE_GEN_KEY = DATA_CACHE_KEY + '_gen';
+const DATA_CACHE_PUT_BATCH = 20;
+
+// generation ปัจจุบันของแคช — เปลี่ยนทุกครั้งที่ข้อมูลถูกแก้
+function cacheGeneration_() {
+  try { return CacheService.getScriptCache().get(DATA_CACHE_GEN_KEY) || ''; } catch (err) { return ''; }
+}
 
 function cacheGetData_() {
   try {
     const c = CacheService.getScriptCache();
-    const n = parseInt(c.get(DATA_CACHE_KEY + '_n') || '0', 10);
-    if (!n) return null;
+    const gen = c.get(DATA_CACHE_GEN_KEY);
+    if (!gen) return null;                 // ไม่มี generation = ยังไม่เคยแคช หรือถูก invalidation
+    const n = parseInt(c.get(DATA_CACHE_KEY + '_' + gen + '_n') || '0', 10);
+    if (!n || n > DATA_CACHE_MAX_CHUNKS) return null;
     const keys = [];
-    for (let i = 0; i < n; i++) keys.push(DATA_CACHE_KEY + '_' + i);
+    for (let i = 0; i < n; i++) keys.push(DATA_CACHE_KEY + '_' + gen + '_' + i);
     const parts = c.getAll(keys);
     let s = '';
     for (let i = 0; i < n; i++) {
-      const p = parts[DATA_CACHE_KEY + '_' + i];
+      const p = parts[keys[i]];
       if (p == null) return null;
       s += p;
     }
@@ -143,33 +161,71 @@ function cacheGetData_() {
   } catch (err) { return null; }
 }
 
-function cachePutData_(obj) {
+// เขียนแคชชุดใหม่ลง key ของ generation ใหม่ แล้วค่อยสลับ generation (compare-and-set)
+// expectedGen = generation ที่อ่านตอนเริ่มคำขอ; ถ้ามีการบันทึกแทรกกลางทาง จะไม่เขียนทับข้อมูลใหม่
+function cachePutData_(obj, expectedGen) {
   try {
+    const c = CacheService.getScriptCache();
+    const baseGen = expectedGen === undefined ? cacheGeneration_() : String(expectedGen || '');
+    if ((c.get(DATA_CACHE_GEN_KEY) || '') !== baseGen) return false; // ข้อมูลถูกแก้ระหว่างอ่าน
+
     const s = JSON.stringify(obj);
-    const puts = {};
-    let n = 0;
-    for (let i = 0; i < s.length; i += DATA_CACHE_CHUNK) {
-      puts[DATA_CACHE_KEY + '_' + n] = s.slice(i, i + DATA_CACHE_CHUNK);
-      n++;
+    const gen = Utilities.getUuid().replace(/-/g, '');
+    const n = Math.ceil(s.length / DATA_CACHE_CHUNK);
+    if (!n || n > DATA_CACHE_MAX_CHUNKS) {
+      console.warn('cachePutData_: skipped, chunks=' + n + ' max=' + DATA_CACHE_MAX_CHUNKS);
+      return false;
     }
-    if (n === 0 || n > 60) return;
-    puts[DATA_CACHE_KEY + '_n'] = String(n);
-    CacheService.getScriptCache().putAll(puts, DATA_CACHE_TTL);
-  } catch (err) { /* แคชล้มเหลวได้ ไม่กระทบการทำงาน */ }
+    const keys = [DATA_CACHE_KEY + '_' + gen + '_n'];
+    const values = [String(n)];
+    for (let i = 0; i < n; i++) {
+      keys.push(DATA_CACHE_KEY + '_' + gen + '_' + i);
+      values.push(s.slice(i * DATA_CACHE_CHUNK, (i + 1) * DATA_CACHE_CHUNK));
+    }
+    for (let i = 0; i < keys.length; i += DATA_CACHE_PUT_BATCH) {
+      const puts = {};
+      const end = Math.min(i + DATA_CACHE_PUT_BATCH, keys.length);
+      for (let j = i; j < end; j++) puts[keys[j]] = values[j];
+      try {
+        c.putAll(puts, DATA_CACHE_TTL);
+      } catch (batchErr) {
+        // บางสภาพแวดล้อมจำกัดขนาด putAll → เขียนทีละคีย์แทน
+        Object.keys(puts).forEach(function (k) { c.put(k, puts[k], DATA_CACHE_TTL); });
+      }
+    }
+    // ตรวจซ้ำก่อนสลับ generation: ถ้ามีคนบันทึกระหว่างเขียน ให้ทิ้งชุดนี้
+    if ((c.get(DATA_CACHE_GEN_KEY) || '') !== baseGen) {
+      c.removeAll(keys);
+      return false;
+    }
+    c.put(DATA_CACHE_GEN_KEY, gen, DATA_CACHE_TTL);
+    return true;
+  } catch (err) {
+    console.warn('cachePutData_ failed: ' + err.message);
+    return false; // แคชล้มเหลวได้ ไม่กระทบการทำงาน
+  }
 }
 
+// invalidation: สลับ generation ทันที (ชุดเก่าเข้าถึงไม่ได้) แล้วค่อยลบ key ชุดเก่า
 function cacheClearData_() {
   try {
     const c = CacheService.getScriptCache();
-    const n = parseInt(c.get(DATA_CACHE_KEY + '_n') || '0', 10);
-    const keys = [DATA_CACHE_KEY + '_n'];
-    for (let i = 0; i < Math.max(n, 60); i++) keys.push(DATA_CACHE_KEY + '_' + i);
+    const oldGen = c.get(DATA_CACHE_GEN_KEY);
+    const stamp = 'x' + Utilities.getUuid().replace(/-/g, '');
+    c.put(DATA_CACHE_GEN_KEY, stamp, DATA_CACHE_TTL);
+    if (!oldGen) return;
+    const n = parseInt(c.get(DATA_CACHE_KEY + '_' + oldGen + '_n') || '0', 10);
+    const keys = [DATA_CACHE_KEY + '_' + oldGen + '_n'];
+    for (let i = 0; i < n && i < DATA_CACHE_MAX_CHUNKS; i++) {
+      keys.push(DATA_CACHE_KEY + '_' + oldGen + '_' + i);
+    }
     c.removeAll(keys);
   } catch (err) {}
 }
 
 function getAllDataCached_(force) {
   const t0 = Date.now();
+  const startedGen = cacheGeneration_();
   if (!force) {
     const cached = cacheGetData_();
     if (cached) {
@@ -177,17 +233,22 @@ function getAllDataCached_(force) {
       return cached;
     }
   }
+  SHEETS_READ_COUNT_ = 0;
   const data = getAllDataByClass_();
-  cachePutData_(data);
-  data._meta = { cached: false, serverMs: Date.now() - t0, sheetsRead: SHEETS_READ_COUNT_ };
+  const cacheWritten = cachePutData_(data, startedGen);
+  data._meta = {
+    cached: false, serverMs: Date.now() - t0,
+    sheetsRead: SHEETS_READ_COUNT_, cacheWritten: cacheWritten
+  };
   return data;
 }
 
 // รันด้วย time-driven trigger ทุก 5 นาที: อุ่นสคริปต์ + เติมแคชไว้ล่วงหน้า
 // ผู้ใช้จึงแทบไม่ต้องรออ่านชีตจริง (เดิมต้องรอทุกครั้งที่แคชหมดอายุ)
 function refreshDataCache() {
+  const gen = cacheGeneration_();
   const data = getAllDataByClass_();
-  cachePutData_(data);
+  cachePutData_(data, gen);
 }
 
 // ⚠️ รันฟังก์ชันนี้ "ครั้งเดียว" ใน Apps Script เพื่อติดตั้ง trigger (รันซ้ำได้ ไม่สร้างซ้ำ)
@@ -573,7 +634,8 @@ function handleAction_(action, data, sessionToken) {
     }
     });
   } finally {
-    cacheClearData_(); // ข้อมูลเปลี่ยนแล้ว → ล้างแคชเสมอ (แม้เกิด error กลางคัน)
+    // ล้างเฉพาะ action ที่เขียนข้อมูลจริง (listAdmins/getSheetInfo อ่านอย่างเดียว)
+    if (MUTATING_ACTIONS.has(action)) cacheClearData_();
   }
 }
 

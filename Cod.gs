@@ -15,7 +15,7 @@ const AUTH_LOGIN_FAILURE_KEY = 'APP_AUTH_LOGIN_FAILURES';
 const AUTH_LOGIN_FAILURE_LIMIT = 5;
 const AUTH_LOGIN_LOCK_SECONDS = 900;
 // เวอร์ชันโค้ดฝั่งเซิร์ฟเวอร์ — ใช้ตรวจว่า deployment ที่ใช้งานอยู่อัปเดตแล้วหรือยัง
-const APP_CODE_VERSION = '2026-11-18-cache-fix';
+const APP_CODE_VERSION = '2026-11-19-edit-attendance';
 const CLASS_LIST = ['ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6', 'ม.1', 'ม.2', 'ม.3'];
 const ATTENDANCE_STATUS_LIST = ['มา', 'สาย', 'ลา', 'ขาด'];
 
@@ -1311,7 +1311,50 @@ function updateAttendanceByClass_(data) {
   const loc = decodeRowId_(data.id, 'ATT_', 'Attendance');
   if (loc.row > loc.sheet.getLastRow()) throw new Error('ไม่พบข้อมูลรายการ กรุณารีเฟรช');
   if (!rowMatchesExpect_(loc.sheet, loc.row, data.expect, 3)) throw new Error('ข้อมูลมีการเปลี่ยนแปลงแล้ว กรุณารีเฟรชแล้วลองใหม่');
-  loc.sheet.getRange(loc.row, 4, 1, 2).setValues([[data.attendance_status, data.attendance_notes || '']]);
+
+  const lastRow = loc.sheet.getLastRow();
+  const row = loc.sheet.getRange(loc.row, 1, 1, 8).getValues()[0];
+  const date = normalizeDate_(row[0]);
+  const studentId = String(row[1] == null ? '' : row[1]).trim();
+  const oldSubject = String(row[2] == null ? '' : row[2]).trim();
+  const oldPeriod = String(row[7] == null ? '' : row[7]).trim();
+
+  const subject = data.attendance_subject == null ? oldSubject : String(data.attendance_subject).trim();
+  const period = data.attendance_period == null ? oldPeriod : String(data.attendance_period).trim();
+  const status = data.attendance_status == null ? String(row[3] == null ? '' : row[3]).trim() : String(data.attendance_status).trim();
+  const notes = data.attendance_notes == null ? String(row[4] == null ? '' : row[4]) : String(data.attendance_notes).trim();
+
+  if (!subject || subject.length > 120) throw new Error('รายวิชาไม่ถูกต้อง');
+  if (ATTENDANCE_STATUS_LIST.indexOf(status) === -1) throw new Error('สถานะการเข้าเรียนไม่ถูกต้อง');
+  if (period && ATTENDANCE_PERIOD_LIST.indexOf(period) === -1) throw new Error('ช่วงเวลาเช็คชื่อไม่ถูกต้อง');
+  if (notes.length > 200 || /^\s*[=+\-@]/.test(notes)) throw new Error('หมายเหตุไม่ถูกต้องหรือยาวเกิน 200 ตัวอักษร');
+
+  // แก้วิชา/ช่วงเวลา → กันข้อมูลชนกันจากหลายเครื่อง (ตรวจจากชีตจริงก่อนเขียน)
+  if (subject !== oldSubject || period !== oldPeriod) {
+    if (lastRow > 1) {
+      const rows = loc.sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        if (i + 2 === loc.row) continue;
+        if (normalizeDate_(r[0]) !== date) continue;
+        const rSubject = String(r[2] == null ? '' : r[2]).trim();
+        const rPeriod = String(r[7] == null ? '' : r[7]).trim();
+        const rStudent = String(r[1] == null ? '' : r[1]).trim();
+        if (period && rPeriod === period && rSubject && rSubject !== subject) {
+          throw new Error('ช่วงเวลา ' + period + ' เช็คชื่อด้วยวิชา ' + rSubject + ' แล้ว (1 ช่วงเวลาเช็คได้เพียงวิชาเดียว)');
+        }
+        if (rStudent === studentId && rSubject === subject && rPeriod === period) {
+          throw new Error('มีรายการเช็คชื่อของนักเรียนคนนี้ วิชาและช่วงเวลานี้อยู่แล้ว กรุณาลบรายการซ้ำก่อน');
+        }
+      }
+    }
+  }
+
+  loc.sheet.getRange(loc.row, 3, 1, 3).setValues([[subject, status, notes]]);
+  if (period !== oldPeriod) {
+    if (period && loc.sheet.getLastColumn() < 8) loc.sheet.getRange(1, 8).setValue('attendance_period');
+    loc.sheet.getRange(loc.row, 8).setValue(period);
+  }
   return { ok: true };
 }
 

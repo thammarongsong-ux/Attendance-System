@@ -2644,37 +2644,84 @@ function loadAttendanceData() {
 async function editAttendance(id) {
   const r = allData.attendance.find(x => x._id === id); if (!r) return;
   const st = allData.students.find(s => String(s.student_id) === String(r.attendance_student_id));
+  const recClasses = recordClasses(r);
+  const subjectSet = new Set(PERIOD_DEFS.filter(p => p.kind === 'activity').map(p => p.activity));
+  allData.subjects.forEach(s => {
+    if (!recClasses.length || recClasses.includes(normalizeClass(s.subject_class))) subjectSet.add(s.subject_name);
+  });
+  if (r.attendance_subject) subjectSet.add(r.attendance_subject);
+  const subjectList = [...subjectSet].sort((a, b) => a.localeCompare(b, 'th'));
+  const currentPeriod = r.attendance_period || '';
+  const sharesClass = x => {
+    const other = recordClasses(x);
+    if (!recClasses.length || !other.length) return true;
+    return other.some(c => recClasses.includes(c));
+  };
+
   const { value } = await Swal.fire({
     title: 'แก้ไขการเช็คชื่อ',
     html: `
       <div class="text-left">
-        <p class="mb-2"><strong>${esc(st?.student_name || '-')}</strong> — ${fmtThaiDate(r.attendance_date)}</p>
-        <p class="mb-2">วิชา: ${esc(r.attendance_subject || '-')}</p>
-        <p class="mb-2">ช่วงเวลา: ${esc(r.attendance_period || '-')}${(findPeriod(r.attendance_period) || {}).activity ? ' · ' + esc(findPeriod(r.attendance_period).activity) : ''}</p>
+        <p class="mb-3"><strong>${esc(st?.student_name || '-')}</strong> — ${fmtThaiDate(r.attendance_date)}</p>
+        <label class="block text-sm mb-1">ช่วงเวลา</label>
+        <select id="sw-period" class="swal2-input" onchange="onEditAttendancePeriodChange()">
+          <option value="">— ไม่ระบุช่วงเวลา —</option>
+          ${PERIOD_DEFS.map(p => `<option value="${esc(p.time)}" ${p.time === currentPeriod ? 'selected' : ''}>${esc(p.time)} · ${esc(p.activity)}</option>`).join('')}
+        </select>
+        <label class="block text-sm mb-1">วิชา</label>
+        <select id="sw-subject" class="swal2-input">
+          ${subjectList.map(s => `<option ${s === r.attendance_subject ? 'selected' : ''}>${esc(s)}</option>`).join('')}
+        </select>
         <label class="block text-sm mb-1">สถานะ</label>
         <select id="sw-status" class="swal2-input">
           ${STATUS_LIST.map(s => `<option ${s === r.attendance_status ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
         <label class="block text-sm mb-1">หมายเหตุ</label>
         <input id="sw-notes" value="${esc(r.attendance_notes || '')}" class="swal2-input" maxlength="200">
+        <p class="text-xs text-gray-500 mt-2">1 ช่วงเวลา ของ 1 ห้อง ใน 1 วัน ต้องเป็นวิชาเดียวกัน</p>
       </div>`,
     showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก',
     confirmButtonColor: '#dc2626',
-    preConfirm: () => ({
-      attendance_status: document.getElementById('sw-status').value,
-      attendance_notes: document.getElementById('sw-notes').value.trim()
-    })
+    preConfirm: () => {
+      const period = document.getElementById('sw-period').value;
+      const subject = document.getElementById('sw-subject').value;
+      const status = document.getElementById('sw-status').value;
+      const notes = document.getElementById('sw-notes').value.trim();
+      if (!subject) { Swal.showValidationMessage('เลือกวิชาก่อนบันทึก'); return false; }
+      const clash = allData.attendance.find(x => x._id !== r._id
+        && x.attendance_date === r.attendance_date && sharesClass(x)
+        && (x.attendance_period || '') === period
+        && x.attendance_subject && x.attendance_subject !== subject);
+      if (clash) {
+        Swal.showValidationMessage(`ช่วงเวลานี้เช็คชื่อด้วยวิชา “${clash.attendance_subject}” แล้ว — 1 ช่วงเวลาเช็คได้เพียงวิชาเดียว`);
+        return false;
+      }
+      const dup = allData.attendance.find(x => x._id !== r._id
+        && x.attendance_date === r.attendance_date && sharesClass(x)
+        && String(x.attendance_student_id) === String(r.attendance_student_id)
+        && (x.attendance_period || '') === period && x.attendance_subject === subject);
+      if (dup) { Swal.showValidationMessage('มีรายการเช็คชื่อของนักเรียนคนนี้ วิชาและช่วงเวลานี้อยู่แล้ว'); return false; }
+      return { attendance_subject: subject, attendance_period: period, attendance_status: status, attendance_notes: notes };
+    }
   });
   if (!value) return;
 
   showLoading('กำลังบันทึก...');
   try {
     await callApi('updateAttendance', { id, ...value, expect: `${r.attendance_date}|${r.attendance_student_id}|${r.attendance_subject}` });
-    notifySuccess('✅ แก้ไขการเช็คชื่อสำเร็จ', `👤 ${esc(st?.student_name || '-')}<br>📅 ${fmtThaiDate(r.attendance_date)} · 📚 ${esc(r.attendance_subject || '-')}<br>📊 ${esc(value.attendance_status)}`);
+    const p = findPeriod(value.attendance_period);
+    notifySuccess('✅ แก้ไขการเช็คชื่อสำเร็จ', `👤 ${esc(st?.student_name || '-')}<br>📅 ${fmtThaiDate(r.attendance_date)}<br>🕒 ${esc(value.attendance_period || 'ไม่ระบุ')}${p ? ' · ' + esc(p.activity) : ''}<br>📚 ${esc(value.attendance_subject)} · 📊 ${esc(value.attendance_status)}`);
     refreshAfterChange(loadAttendanceData);
   } catch (err) {
     Swal.fire('ผิดพลาด', err.message, 'error');
   }
+}
+
+function onEditAttendancePeriodChange() {
+  const p = findPeriod(document.getElementById('sw-period').value);
+  if (!p || p.kind !== 'activity') return;
+  const sel = document.getElementById('sw-subject');
+  if (sel && [...sel.options].some(o => o.value === p.activity)) sel.value = p.activity;
 }
 
 async function deleteAttendance(id) {
